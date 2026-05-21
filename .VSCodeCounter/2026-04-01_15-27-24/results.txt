@@ -1,0 +1,82 @@
+Date : 2026-04-01 15:27:24
+Directory : /Users/liam/quasar/quasar-errors
+Total : 39 files,  4240 codes, 297 comments, 597 blanks, all 5134 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| Python   |         39 |      4,240 |        297 |        597 |      5,134 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                      | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                         |         39 |      4,240 |        297 |        597 |      5,134 |
+| src                                                                                                       |         39 |      4,240 |        297 |        597 |      5,134 |
+| src/quasar_errors                                                                                         |         39 |      4,240 |        297 |        597 |      5,134 |
+| src/quasar_errors (Files)                                                                                 |          2 |        133 |          9 |         27 |        169 |
+| src/quasar_errors/analysis                                                                                |          5 |      1,388 |        178 |        158 |      1,724 |
+| src/quasar_errors/bootstrapping                                                                           |          2 |        222 |         50 |         47 |        319 |
+| src/quasar_errors/measures                                                                                |          4 |        321 |         20 |         60 |        401 |
+| src/quasar_errors/model_samples                                                                           |         14 |        934 |         37 |        145 |      1,116 |
+| src/quasar_errors/model_samples (Files)                                                                   |          2 |        295 |          6 |         36 |        337 |
+| src/quasar_errors/model_samples/balmer                                                                    |          2 |         79 |          3 |         10 |         92 |
+| src/quasar_errors/model_samples/continuum                                                                 |          3 |         78 |          6 |         13 |         97 |
+| src/quasar_errors/model_samples/iron                                                                      |          3 |        106 |          3 |         16 |        125 |
+| src/quasar_errors/model_samples/line                                                                      |          3 |        365 |         19 |         66 |        450 |
+| src/quasar_errors/model_samples/utils                                                                     |          1 |         11 |          0 |          4 |         15 |
+| src/quasar_errors/nested_sampling                                                                         |         12 |      1,242 |          3 |        160 |      1,405 |
+| src/quasar_errors/nested_sampling (Files)                                                                 |          2 |        239 |          0 |         45 |        284 |
+| src/quasar_errors/nested_sampling/pseudo_models                                                           |          9 |        994 |          3 |        113 |      1,110 |
+| src/quasar_errors/nested_sampling/pseudo_models (Files)                                                   |          6 |        887 |          0 |         90 |        977 |
+| src/quasar_errors/nested_sampling/pseudo_models/utils                                                     |          3 |        107 |          3 |         23 |        133 |
+| src/quasar_errors/nested_sampling/utils                                                                   |          1 |          9 |          0 |          2 |         11 |
++-----------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                                                  | language | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/__init__.py                                            | Python   |          0 |          0 |          1 |          1 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/analysis/__init__.py                                   | Python   |          0 |          0 |          1 |          1 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/analysis/analyser.py                                   | Python   |      1,205 |        151 |        141 |      1,497 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/analysis/hyperparams.py                                | Python   |         11 |          0 |          1 |         12 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/analysis/inner.py                                      | Python   |        100 |         27 |         11 |        138 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/analysis/metadata.py                                   | Python   |         72 |          0 |          4 |         76 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/bootstrapping/base_bootstrapper.py                     | Python   |        209 |         50 |         45 |        304 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/bootstrapping/hyperparams.py                           | Python   |         13 |          0 |          2 |         15 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/error_result.py                                        | Python   |        133 |          9 |         26 |        168 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/measures/__init__.py                                   | Python   |          2 |          4 |          0 |          6 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/measures/approx.py                                     | Python   |        122 |         12 |         23 |        157 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/measures/exact.py                                      | Python   |        131 |          0 |         25 |        156 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/measures/utils.py                                      | Python   |         66 |          4 |         12 |         82 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/__init__.py                              | Python   |         12 |          6 |          0 |         18 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/balmer/__init__.py                       | Python   |          4 |          0 |          0 |          4 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/balmer/balmer_sample.py                  | Python   |         75 |          3 |         10 |         88 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/continuum/__init__.py                    | Python   |          6 |          0 |          1 |          7 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/continuum/powerlaw_sample.py             | Python   |         32 |          6 |          6 |         44 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/continuum/powerlaw_sample_list.py        | Python   |         40 |          0 |          6 |         46 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/iron/__init__.py                         | Python   |          6 |          0 |          1 |          7 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/iron/iron_sample.py                      | Python   |         60 |          3 |          9 |         72 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/iron/iron_sample_list.py                 | Python   |         40 |          0 |          6 |         46 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/line/__init__.py                         | Python   |          6 |          0 |          1 |          7 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/line/gaussian_sample.py                  | Python   |        157 |          7 |         30 |        194 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/line/gaussian_sample_list.py             | Python   |        202 |         12 |         35 |        249 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/sample.py                                | Python   |        283 |          0 |         36 |        319 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/model_samples/utils/base_sample_list.py                | Python   |         11 |          0 |          4 |         15 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/nested_sampler.py                      | Python   |          0 |          0 |          1 |          1 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_compound_model.py               | Python   |        239 |          0 |         44 |        283 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/__init__.py              | Python   |         22 |          0 |          1 |         23 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/pseudo_balmer_model.py   | Python   |        133 |          0 |          9 |        142 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/pseudo_gaussian.py       | Python   |         65 |          0 |          8 |         73 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/pseudo_iron_model.py     | Python   |        112 |          0 |          8 |        120 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/pseudo_powerlaw.py       | Python   |         47 |          0 |          9 |         56 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/pseudo_v_profile_copy.py | Python   |        508 |          0 |         55 |        563 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/utils/__init__.py        | Python   |          3 |          0 |          1 |          4 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/utils/pseudo_model.py    | Python   |         29 |          0 |          7 |         36 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/pseudo_models/utils/pseudo_param.py    | Python   |         75 |          3 |         15 |         93 |
+| /Users/liam/quasar/quasar-errors/src/quasar_errors/nested_sampling/utils/loss_functions.py                | Python   |          9 |          0 |          2 |         11 |
+| Total                                                                                                     |          |      4,240 |        297 |        597 |      5,134 |
++-----------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+

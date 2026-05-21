@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: quasar-errors
+Version: 0.1.0
+Project-URL: Homepage, https://github.com/liamdeburca/quasar-errors
+Project-URL: Repository, https://github.com/liamdeburca/quasar-errors.git
+Project-URL: Bug Tracker, https://github.com/liamdeburca/quasar-errors/issues
+Requires-Python: >=3.12
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.16
+Requires-Dist: astropy>=7.0
+Requires-Dist: pydantic>=2.12
+Requires-Dist: numba
+Requires-Dist: quasar-typing
+Requires-Dist: quasar-models
+Requires-Dist: quasar-utils
