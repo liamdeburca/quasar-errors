@@ -1,13 +1,13 @@
-from typing import Self, Iterable, Literal, Callable
-from numpy import array, float64
+from typing import Self, Iterable, Literal, Callable, ClassVar
+from numpy import array, float64, fromiter
 from scipy.stats._distn_infrastructure import rv_continuous_frozen
 from functools import cached_property
-from pydantic import validate_call
 from pydantic.dataclasses import dataclass
 
 from quasar_models.line import GaussianModel, _VProfileCopy
 from quasar_typing.numpy import FloatVector
 from quasar_typing.astropy import Model_
+from quasar_utils.decorators import validate_call
 
 from .gaussian_sample import GaussianSample
 from ..utils.base_sample_list import BaseSampleList
@@ -15,6 +15,8 @@ from ..utils.base_sample_list import BaseSampleList
 @dataclass(frozen=True)
 class GaussianSampleList(BaseSampleList[GaussianSample]):
     samples: list[GaussianSample]
+
+    model_type: ClassVar[Literal["em"]] = "em"
 
     @classmethod
     @validate_call
@@ -48,14 +50,10 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
                 (model,) if model.n_submodels == 1 else model,
             )
         )
-    
-    @property
-    def model_type(self) -> Literal["em"]: 
-        return "em"
-    
+        
     @cached_property
     def wave(self) -> FloatVector:
-        return array([sample.wave for sample in self], dtype=float64)
+        return fromiter((sample.wave for sample in self), dtype=float64)
     
     @cached_property
     def strength(self) -> FloatVector:
@@ -72,14 +70,14 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
         return self.strength / self.strength.sum()
     
     @cached_property
-    def sigma_v(self) -> FloatVector:
-        sigma_v = []
+    def fwhm_v(self) -> FloatVector:
+        fwhm_v = []
         for sample in self:
             if sample.is_v_profile_copy:
-                sigma_v.extend(sample.sigma_v)
+                fwhm_v.extend(sample.fwhm_v)
             else:
-                sigma_v.append(sample.sigma_v)
-        return array(sigma_v, dtype=float64)
+                fwhm_v.append(sample.fwhm_v)
+        return array(fwhm_v, dtype=float64)
     
     @cached_property
     def v_off(self) -> FloatVector:
@@ -100,6 +98,16 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
             else:
                 mu.append(sample.mu)
         return array(mu, dtype=float64)
+    
+    @cached_property
+    def fwhm(self) -> FloatVector:
+        fwhm = []
+        for sample in self:
+            if sample.is_v_profile_copy:
+                fwhm.extend(sample.fwhm)
+            else:
+                fwhm.append(sample.fwhm)
+        return array(fwhm, dtype=float64)
     
     @cached_property
     def sigma(self) -> FloatVector:
@@ -133,24 +141,16 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
         if len(self) == 1:
             return self[0].pdf
         
-        kwargs = {}
         if self.is_v_profile_copy:
-            kwargs['weight'] = self.strength / self.strength.sum()
-            kwargs['dist'] = self.dist
+            ws = self.strength / self.strength.sum()
+            ds = self.dist
         else:
-            kwargs['weight'] = (1.0,)
-            kwargs['dist'] = (self.dist,)
+            ws = (1.0,)
+            ds = (self.dist,)
 
-        def pdf(
-            x: float | FloatVector, 
-            *,
-            kwargs: dict = kwargs,
-        ) -> float | FloatVector:
-            return sum(
-                w * d.pdf(x)
-                for w, d in zip(kwargs['weight'], kwargs['dist'])
-            )
-
+        def pdf(x: float | FloatVector) -> float | FloatVector:
+            nonlocal ws, ds
+            return sum(w * d.pdf(x) for w, d in zip(ws, ds))
         return pdf
     
     @cached_property
@@ -158,23 +158,16 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
         if len(self) == 1:
             return self[0].cdf
         
-        kwargs = {}
         if self.is_v_profile_copy:
-            kwargs['weight'] = self.strength / self.strength.sum()
-            kwargs['dist'] = self.dist
+            ws = self.strength / self.strength.sum()
+            ds = self.dist
         else:
-            kwargs['weight'] = (1.0,)
-            kwargs['dist'] = (self.dist,)
+            ws = (1.0,)
+            ds = (self.dist,)
 
-        def cdf(
-            x: float | FloatVector, 
-            *, 
-            kwargs: dict = kwargs,
-        ) -> float | FloatVector:
-            return sum(
-                w * d.cdf(x)
-                for w, d in zip(kwargs['weight'], kwargs['dist'])
-            )
+        def cdf(x: float | FloatVector) -> float | FloatVector:
+            nonlocal ws, ds
+            return sum(w * d.cdf(x) for w, d in zip(ws, ds))
 
         return cdf
     
@@ -187,7 +180,7 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
         return self[0].isf
 
     def sort(self, inplace: bool = False) -> Self:
-        if inplace:
+        if not inplace:
             return GaussianSampleList(self.samples).sort(inplace=True)
         
         self.samples = sorted(self.samples, key=lambda s: s.wave)
@@ -199,17 +192,14 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
         target_wave: float | set[float],
     ) -> tuple[Self | None, Self | None]:
         """
-        ** PYDANTIC VALIDATED METHOD **
-
         Splits this GaussianSampleList into two: one containing samples whose 
         wave matches the target wave(s), and the other containing the rest.
         """
-        sample_waves: set[float] = set(sample.wave for sample in self)
-        in_dict: dict[float, bool] = (
-            {w: (w < target_wave) for w in sample_waves}
-            if isinstance(target_wave, float) else
-            {w: (w in target_wave) for w in sample_waves}
-        )
+        if not isinstance(target_wave, set):
+            target_wave = {target_wave}
+
+        sample_waves = set(sample.wave for sample in self)
+        in_dict = {w: (w in target_wave) for w in sample_waves}
 
         targets = GaussianSampleList.fromGaussianSamples(
             sample for sample in self if in_dict[sample.wave]
@@ -226,18 +216,14 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
         target_line: str | set[str],
     ) -> tuple[Self | None, Self | None]:
         """
-        ** PYDANTIC VALIDATED METHOD **
-        
         Splits this GaussianSampleList into two: one containing samples whose 
         line matches the target line(s), and the other containing the rest.
         """
+        if not isinstance(target_line, set):
+            target_line = {target_line}
         
-        sample_lines: set[str] = set(sample.pure_name for sample in self)
-        in_dict: dict[str, bool] = (
-            {line: (line == target_line) for line in sample_lines}
-            if isinstance(target_line, str) else
-            {line: (line in target_line) for line in sample_lines}
-        )
+        sample_lines = set(sample.pure_name for sample in self)
+        in_dict = {line: (line in target_line) for line in sample_lines}
         
         targets = GaussianSampleList.fromGaussianSamples(
             sample for sample in self if in_dict[sample.pure_name]

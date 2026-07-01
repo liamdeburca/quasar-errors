@@ -9,10 +9,12 @@ __all__ = [
     "PowerLawSample", 
     "IronSample", "IronSampleList",
     "BalmerSample",
+    "HostGalaxySample",
     "GaussianSample", "GaussianSampleList",
 ]
 from .sample import Sample
 from .continuum import PowerLawSample
 from .iron import IronSample, IronSampleList
 from .balmer import BalmerSample
+from .host import HostGalaxySample
 from .line import GaussianSample, GaussianSampleList

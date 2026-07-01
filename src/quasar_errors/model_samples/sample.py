@@ -1,16 +1,18 @@
 from typing import Self, Callable
 from numpy import zeros_like, float64
 from collections import defaultdict
-from pydantic import validate_call
 from pydantic.dataclasses import dataclass
 
 from quasar_typing.numpy import FloatVector
 from quasar_typing.astropy import Model_
 
+from quasar_utils.decorators import validate_call
+
 from .continuum.powerlaw_sample import PowerLawSample
 from .iron.iron_sample import IronSample
 from .iron.iron_sample_list import IronSampleList
 from .balmer.balmer_sample import BalmerSample
+from .host.host_sample import HostGalaxySample
 from .line.gaussian_sample import GaussianSample
 from .line.gaussian_sample_list import GaussianSampleList
 
@@ -23,36 +25,32 @@ class Sample:
     pl: PowerLawSample | None = None
     fe: IronSampleList | None = None
     ba: BalmerSample | None = None
-    hg: None = None
+    hg: HostGalaxySample | None = None
     em: GaussianSampleList | None = None
 
     weight: float = 1.0
 
+    def __str__(self) -> str:
+        return f"Sample at <{hex(id(self))}>"
+
     def __repr__(self) -> str:
-        return "<Sample {} x={} y={} dy={} pl={} fe={} ba={} hg={} em={}>".format(
-            hex(id(self)),
-            hex(id(self.x)),
-            hex(id(self.y)),
-            hex(id(self.dy)),
-            '/' if self.pl is None else hex(id(self.pl)),
-            '/' if self.fe is None else hex(id(self.fe)),
-            '/' if self.ba is None else hex(id(self.ba)),
-            '/' if self.hg is None else hex(id(self.hg)),
-            '/' if self.em is None else hex(id(self.em)),
-        )
+        return '\n'.join([
+            self.__str__(),
+            f"   x=<{hex(id(self.x))}>",
+            f"   y=<{hex(id(self.y))}>",
+            f"  dy=<{hex(id(self.dy))}>",
+            f"  pl=<{'/' if self.pl is None else hex(id(self.pl))}>",
+            f"  fe=<{'/' if self.fe is None else hex(id(self.fe))}>",
+            f"  ba=<{'/' if self.ba is None else hex(id(self.ba))}>",
+            f"  hg=<{'/' if self.hg is None else hex(id(self.hg))}>",
+            f"  em=<{'/' if self.em is None else hex(id(self.em))}>",
+        ])
     
     def __call__(self, x: FloatVector) -> FloatVector:
         y = zeros_like(x, dtype=float64)
-        if self.pl is not None:
-            y += self.pl(x)
-        if self.fe is not None:
-            y += self.fe(x)
-        if self.ba is not None:
-            y += self.ba(x)
-        if self.hg is not None:
-            y += self.hg(x)
-        if self.em is not None:
-            y += self.em(x)
+        for sample in (self.pl, self.fe, self.ba, self.hg, self.em):
+            if sample is not None:
+                y += sample(x)
         return y
 
     @classmethod
@@ -143,64 +141,80 @@ class Sample:
         count: int = 0
         for submodel in submodels:
             n = submodel.parameters.size
-
-            match submodel.model_type:
-                case 'pl':
+            match submodel.model_type, n:
+                case 'pl', _:
                     sample = PowerLawSample(
-                        *param_vector[count:count+n],
-                        submodel.x0,
+                        flux=param_vector[count],
+                        alpha=param_vector[count+1],
+                        x0=submodel.x0,
                         name=submodel.name,
+                        evaluate_func=submodel.evaluate_func,
                     )
 
-                case 'fe':
+                case 'fe', _:
                     sample = IronSample(
-                        *param_vector[count:count+n],
-                        submodel.template,
-                        submodel.scale,
-                        submodel.sigma_res,
-                        perform_interp_fitting=submodel._perform_interp_fitting,
-                        name=submodel.name,
-                    )
-
-                case 'ba':
-                    sample = BalmerSample(
-                        *param_vector[count:count+n],
-                        submodel.edge,
-                        submodel.sigma_res,
-                        submodel.waves,
-                        submodel.weights,
-                        submodel.boltz,
-                        submodel.x_grid,
+                        flux=param_vector[count],
+                        fwhm=param_vector[count+1],
+                        split=param_vector[count+2],
+                        left=param_vector[count+3],
+                        right=param_vector[count+4],
                         name=submodel.name,
                         template=submodel.template,
-                        perform_interp_fitting=submodel._perform_interp_fitting,
+                        evaluate_func=submodel.evaluate_func,
+                        **submodel._interpolation_matrices,
                     )
 
-                case 'em':
-                    if n == 3:
-                        sample = GaussianSample(
-                            *param_vector[count:count+n],
-                            submodel.wave,
-                            submodel.sigma_res,
-                            submodel.n_sigmas,
-                            is_v_profile_copy=False,
-                            n_profiles=1,
-                            strength_scale=1.0,
-                            name=submodel.name,
-                        )
-                    else:
-                        sample = GaussianSample(
-                            param_vector[count+1:count+n:3],
-                            param_vector[count+2:count+n:3],
-                            param_vector[count+3:count+n:3],
-                            submodel.wave,
-                            submodel.sigma_res,
-                            submodel.n_sigmas,
-                            is_v_profile_copy=True,
-                            n_profiles=submodel._n_profiles,
-                            strength_scale=param_vector[count],
-                            name=submodel.name,
-                        )
+                case 'ba', _:
+                    sample = BalmerSample(
+                        flux=param_vector[count],
+                        fwhm=param_vector[count+1],
+                        ratio=param_vector[count+2],
+                        name=submodel.name,
+                        continuum_template=submodel.continuum_template,
+                        series_template=submodel.series_template,
+                        evaluate_func=submodel.evaluate_func,
+                        **submodel._interpolation_matrices,
+                    )
+                case 'hg', _:
+                    sample = HostGalaxySample(
+                        flux=param_vector[count],
+                        fwhm=param_vector[count+1],
+                        name=submodel.name,
+                        template=submodel.template,
+                        evaluate_func=submodel.evaluate_func,
+                        **submodel._interpolation_matrices,
+                    )
+
+                case 'em', 3:
+                    sample = GaussianSample(
+                        strength=param_vector[count],
+                        fwhm_v=param_vector[count+1],
+                        v_off=param_vector[count+2],
+                        wave=submodel.wave,
+                        sigma_res=submodel.sigma_res,
+                        n_sigmas=submodel.n_sigmas,
+                        name=submodel.name,
+                        pure_name=submodel.pure_name,
+                        is_v_profile_copy=False,
+                        n_profiles=1,
+                        strength_scale=1.0,
+                        evaluate_func=submodel.evaluate_func,
+                    )
+                case 'em', _:
+                    sample = GaussianSample(
+                        strength=param_vector[count+1:count+n:3],
+                        fwhm_v=param_vector[count+2:count+n:3],
+                        v_off=param_vector[count+3:count+n:3],
+                        wave=submodel.wave,
+                        sigma_res=submodel.sigma_res,
+                        n_sigmas=submodel.n_sigmas,
+                        name=submodel.name,
+                        pure_name=submodel.pure_name,
+                        is_v_profile_copy=True,
+                        n_profiles=submodel._n_profiles,
+                        strength_scale=param_vector[count],
+                        # Leave out evaluate_func -> 'gaussian.evaluate_v'
+                    )
 
             all_model_samples[submodel.model_type].append(sample)
             count += n

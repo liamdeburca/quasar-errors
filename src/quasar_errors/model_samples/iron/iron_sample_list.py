@@ -1,9 +1,9 @@
 from typing import Self, Iterable
-from pydantic import validate_call
 from pydantic.dataclasses import dataclass
 
 from quasar_models.iron import IronModel
 from quasar_typing.astropy import Model_
+from quasar_utils.decorators import validate_call
 
 from .iron_sample import IronSample
 from ..utils.base_sample_list import BaseSampleList

@@ -1,89 +1,83 @@
-from typing import Self, Literal
-from pydantic import validate_call
+from typing import Self, Literal, ClassVar
+from numpy import array, zeros_like, float64
+
+from pydantic import ConfigDict
 from pydantic.dataclasses import dataclass
 
-from quasar_models.balmer import BalmerModel, BalmerSeriesTemplate, BalmerContinuumTemplate, evaluation
+from quasar_core.modelling.balmer import BalmerEvaluate, evaluate_exact
+
+from quasar_models.balmer import (
+    BalmerModel, 
+    BalmerSeriesTemplate, BalmerContinuumTemplate,
+)
 from quasar_typing.numpy import FloatVector
 from quasar_typing.scipy import csr_matrix_
 
-@dataclass(frozen=True)
-class BalmerSample:
-    """
-    ** PYDANTIC DATACLASS **
-    """
+from quasar_utils.decorators import validate_call
+
+from ..utils.base_sample import BaseSample
+
+@dataclass(frozen=True, kw_only=True)
+class BalmerSample(BaseSample):
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        ignored_types=(BalmerEvaluate,),
+    )
+
     flux: float
     fwhm: float
-    temp: float
-    tau: float
-    scale: float
     ratio: float
 
-    edge: float
-    sigma_res: float
-    waves: FloatVector
-    weights: FloatVector
-    boltz: float
-    x_grid: FloatVector
-    
     name: str = ""
-    continuum_template: BalmerContinuumTemplate | None = None
-    series_template: BalmerSeriesTemplate | None = None
-    perform_interp_fitting: bool = False
+
+    continuum_template: BalmerContinuumTemplate
+    series_template: BalmerSeriesTemplate
+    
+    interpolation_matrix: tuple[csr_matrix_, FloatVector] | None = None
+    evaluate_func: BalmerEvaluate = evaluate_exact
+
+    model_type: ClassVar[Literal["ba"]] = "ba"
 
     @classmethod
     @validate_call
-    def fromBalmerModel(
-        cls,
-        model: BalmerModel,
-    ) -> Self:
+    def fromBalmerModel(cls, model: BalmerModel) -> Self:
         return BalmerSample(
-            model.flux.value,
-            model.fwhm.value,
-            model.temp.value,
-            model.tau.value,
-            model.scale.value,
-            model.ratio.value,
-            model.edge,
-            model.sigma_res,
-            model.waves,
-            model.weights,
-            model.boltz,
-            model.x_grid,
+            flux=model.flux.value,
+            fwhm=model.fwhm.value,
+            ratio=model.ratio.value,
             name=model.name,
             continuum_template=model.continuum_template,
             series_template=model.series_template,
-            perform_interp_fitting=model._perform_interp_fitting,
+            **model._interpolation_matrices,
+            evaluate_func=model.evaluate_func,
         )
     
     def __call__(
-        self,
-        x: float | FloatVector,
-        continuum_interpolation_matrix: tuple[csr_matrix_, FloatVector] | None = None,
-        series_interpolation_matrix: tuple[csr_matrix_, FloatVector] | None = None,
+        self, 
+        x: float | FloatVector, 
+        y: FloatVector | None = None,
     ) -> float | FloatVector:
-        if self.perform_interp_fitting:
-            return evaluation.evaluate_interp(
-                x,
-                self.flux, self.fwhm, self.ratio,
-                continuum_template=self.continuum_template,
-                series_template=self.series_template, 
-                continuum_interpolation_matrix=continuum_interpolation_matrix,
-                series_interpolation_matrix=series_interpolation_matrix,
-            )
+        if isinstance(x, (int, float)):
+            assert y is None
+            _x = array([x], dtype=float64)
+            return self(_x)[0]
         
-        return evaluation.evaluate(
+        if y is None:
+            y = zeros_like(x, dtype=float64)
+        return self.evaluate_func(
             x,
             self.flux, self.fwhm, self.ratio,
-            continuum_template=self.continuum_template,
-            series_template=self.series_template,
-            continuum_interpolation_matrix=continuum_interpolation_matrix,
-            series_interpolation_matrix=series_interpolation_matrix,
+            template_x=self.continuum_template.x,
+            continuum_fwhm=self.continuum_template.fwhm,
+            continuum_data=self.continuum_template.data / self.continuum_template.normalisation,
+            series_fwhm=self.series_template.fwhm,
+            series_data=self.series_template.data / self.series_template.normalisation,
+            sigma_res=self.continuum_template.sigma_res,
+            n_scales=self.continuum_template.n_scales,
+            interpolation_matrix=self.interpolation_matrix,
+            y=y,
         )
     
-    @property
-    def model_type(self) -> Literal["ba"]: 
-        return "ba"
-
     @property
     def sorting_key(self) -> tuple[float, float]: 
         return (2.0, 0.0)
