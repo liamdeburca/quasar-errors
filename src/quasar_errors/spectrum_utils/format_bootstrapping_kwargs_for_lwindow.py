@@ -1,41 +1,45 @@
 from logging import getLogger
 from typing import Any
 
-from ..bootstrapping import (
-    BaseBootstrapper, 
-    SpectrumBootstrapper, 
-    FlexibleBootstrapper, 
-    StandardBootstrapper, 
-    RigidBootstrapper,
-)
-from quasar_models import PowerLawModel, IronModel, BalmerModel
-
-from quasar_utils.continuum_fit_result import ContinuumFitResult
-
-from quasar_typing.numpy import RandomState_
-from quasar_typing.astropy import FitterInstance, CompoundModel_
+from quasar_models import BalmerModel, IronModel, PowerLawModel
+from quasar_typing.astropy import CompoundModel_
 from quasar_typing.logging import Logger_
 from quasar_typing.misc import (
-    Variant, ModelTypes, BootstrapType, VaryLines, Pool_,
+    BootstrapType,
+    ModelTypes,
+    Pool_,
+    Variant,
+    VaryLines,
+)
+from quasar_typing.numpy import RandomState_
+from quasar_utils.continuum_fit_result import ContinuumFitResult
+from quasar_utils.setup import FitterKwargs
+
+from ..bootstrapping import (
+    BaseBootstrapper,
+    FlexibleBootstrapper,
+    RigidBootstrapper,
+    SpectrumBootstrapper,
+    StandardBootstrapper,
 )
 
 logger = getLogger(__name__)
 
+
 def format_bootstrapping_kwargs_for_lwindow(
     lwindow,
-    fitter: FitterInstance,
+    fitter_kwargs: FitterKwargs,
     *,
     pl: PowerLawModel | None = None,
     fe: IronModel | CompoundModel_[IronModel] | None = None,
     ba: BalmerModel | None = None,
     hg: None = None,
-
     without_rejections: bool = False,
     without_absorption: bool = False,
     with_neighbours: bool = True,
-    variant: Variant = 'standard',
+    variant: Variant = "standard",
     model_types: ModelTypes | None = None,
-    bootstrap_type: BootstrapType = 'model',
+    bootstrap_type: BootstrapType = "model",
     n_sigmas: float = 2.0,
     vary_lines: VaryLines | None = None,
     pool: Pool_ | None = None,
@@ -86,7 +90,7 @@ def format_bootstrapping_kwargs_for_lwindow(
         The number of standard deviations used to constrain the power law
         parameter bounds during 'flexible' bootstrapping.
     vary_lines : set['all' | str] | None
-        Names of the emission lines to allow to vary during bootstrapping. Only 
+        Names of the emission lines to allow to vary during bootstrapping. Only
         used for 'rigid' bootstrapping. If None, all lines are varied.
     pool : multiprocessing.Pool | None
         The multiprocessing pool to use for parallelization.
@@ -109,55 +113,57 @@ def format_bootstrapping_kwargs_for_lwindow(
     logger : logging.Logger
         The logger this function uses to log messages.
     """
-    kwargs = dict(
-        pl=pl,
-        fe=fe,
-        ba=ba,
-        hg=hg,
-        em=lwindow.getModel(thaw=False),
-        usable_pixels=None,
-        vary_lines=None,
-        sigma_res=lwindow.info.loading['sigma_res'],
-        pool=pool,
-        info=lwindow.info,
-        cfit=cfit,
-        fitter=fitter,
-        iterations=iterations,
-        random_state=random_state,
-        renew_rng=renew_rng,
-        bootstrap_type=bootstrap_type,
-        n_sigmas=n_sigmas,
-        replace_missing=replace_missing,
-        tqdm_disable=tqdm_disable,
-        tqdm_leave=tqdm_leave,
-    )
-    spectrum = getattr(lwindow, 'spectrum', None)
+    kwargs = {
+        "pl": pl,
+        "fe": fe,
+        "ba": ba,
+        "hg": hg,
+        "em": lwindow.getModel(thaw=False),
+        "usable_pixels": None,
+        "vary_lines": None,
+        "sigma_res": lwindow.info.loading["sigma_res"],
+        "pool": pool,
+        "info": lwindow.info,
+        "cfit": cfit,
+        "fitter_kwargs": fitter_kwargs,
+        "iterations": iterations,
+        "random_state": random_state,
+        "renew_rng": renew_rng,
+        "bootstrap_type": bootstrap_type,
+        "n_sigmas": n_sigmas,
+        "replace_missing": replace_missing,
+        "tqdm_disable": tqdm_disable,
+        "tqdm_leave": tqdm_leave,
+    }
+    spectrum = getattr(lwindow, "spectrum", None)
 
     ### Models ###
 
     if not model_types:
-        model_types = ModelTypes({'all'})
-        msg = f"Empty or missing 'model_types' set! " \
+        model_types = ModelTypes({"all"})
+        msg = (
+            f"Empty or missing 'model_types' set! "
             f"Defaulting to: {model_types=}"
+        )
         logger.debug(msg)
 
     required_model_types: set[str] = set()
-    if variant == 'spectrum':
+    if variant == "spectrum":
         # No refitting
         bootstrapper_cls = SpectrumBootstrapper
-    elif variant == 'standard':
+    elif variant == "standard":
         # All models are refit
         bootstrapper_cls = StandardBootstrapper
-    elif variant == 'flexible':
+    elif variant == "flexible":
         # Power law and emission lines are refit
         bootstrapper_cls = FlexibleBootstrapper
-        required_model_types.add('pl')
-        required_model_types.add('em')
+        required_model_types.add("pl")
+        required_model_types.add("em")
     else:
         # Emission lines are refit
         bootstrapper_cls = RigidBootstrapper
-        required_model_types.add('em')
-        kwargs['vary_lines'] = vary_lines or VaryLines({'all'})
+        required_model_types.add("em")
+        kwargs["vary_lines"] = vary_lines or VaryLines({"all"})
 
     for r_type in required_model_types:
         if r_type in model_types:
@@ -172,7 +178,7 @@ def format_bootstrapping_kwargs_for_lwindow(
         model_types.add(r_type)
 
     for m_type in filter(
-        lambda m_type: (kwargs[m_type] is None) and not (m_type == 'em'), 
+        lambda m_type: kwargs[m_type] is None and m_type != "em",
         model_types,
     ):
         if m_type in required_model_types:
@@ -191,19 +197,17 @@ def format_bootstrapping_kwargs_for_lwindow(
                     '{variant}' bootstrapping! Cancelling bootstrapping."
                 logger.critical(msg)
                 raise ValueError(msg)
-            
+
             kwargs[m_type] = model
-        else:
-            if spectrum is None:
-                continue
-            elif (windows := spectrum[m_type]) is None:
-                continue
-            elif (model := windows.getModel()) is None:
-                continue
+        elif (
+            spectrum is not None
+            and (windows := spectrum[m_type]) is not None
+            and (model := windows.getModel()) is not None
+        ):
             kwargs[m_type] = model
 
     args = (lwindow.x, lwindow.y, lwindow.dy)
-    kwargs['usable_pixels'] = lwindow.getMask.__wrapped__(
+    kwargs["usable_pixels"] = lwindow.getMask.__wrapped__(
         lwindow,
         covered=True,
         without_rejections=without_rejections,
@@ -211,26 +215,32 @@ def format_bootstrapping_kwargs_for_lwindow(
         with_neighbours=with_neighbours,
         valid=True,
     )[lwindow.mask]
-    
-    if variant == 'flexible' and kwargs['cfit'] is None:
+
+    if variant == "flexible" and kwargs["cfit"] is None:
         if spectrum is None:
-            msg = "Missing 'cfit': Could not find parent Spectrum instance \
-                needed to retrieve 'pl' windows!"
+            msg = (
+                "Missing 'cfit': Could not find parent Spectrum instance "
+                "needed to retrieve 'pl' windows!"
+            )
             logger.critical(msg)
             raise ValueError(msg)
-        elif (cont_windows := spectrum['pl']) is None:
-            msg = "Missing 'cfit': Could not find 'pl' windows required for \
-                'flexible' bootstrapping!"
-            logger.critical(msg)
-            raise ValueError(msg)
-        
-        try: 
-            cfit = cont_windows.summariseContinuumFitResult()
-        except Exception as e:
-            msg = f"Missing 'cfit': Failed to get 'cfit' from 'pl' windows: {e}"
+        elif (cont_windows := spectrum["pl"]) is None:
+            msg = (
+                "Missing 'cfit': Could not find 'pl' windows required for "
+                "'flexible' bootstrapping!"
+            )
             logger.critical(msg)
             raise ValueError(msg)
 
-        kwargs['cfit'] = cfit
-    
+        try:
+            cfit = cont_windows.summariseContinuumFitResult()
+        except Exception as e:
+            msg = (
+                f"Missing 'cfit': Failed to get 'cfit' from 'pl' windows: {e}"
+            )
+            logger.critical(msg)
+            raise ValueError(msg)
+
+        kwargs["cfit"] = cfit
+
     return bootstrapper_cls, args, kwargs

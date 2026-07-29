@@ -1,12 +1,28 @@
 __all__ = [
-    'BaseBootstrapper',
-    'SpectrumBootstrapper',
-    'StandardBootstrapper',
-    'FlexibleBootstrapper',
-    'RigidBootstrapper',
+    "BaseBootstrapper",
+    "FlexibleBootstrapper",
+    "RigidBootstrapper",
+    "SpectrumBootstrapper",
+    "StandardBootstrapper",
 ]
+from typing import ClassVar
+
+from quasar_typing.misc import Variant
+
 from .base_bootstrapper import BaseBootstrapper
-from .spectrum_bootstrapper import SpectrumBootstrapper
-from .standard_bootstrapper import StandardBootstrapper
-from .flexible_bootstrapper import FlexibleBootstrapper
-from .rigid_bootstrapper import RigidBootstrapper
+
+
+class FlexibleBootstrapper(BaseBootstrapper):
+    variant: ClassVar[Variant] = "flexible"
+
+
+class RigidBootstrapper(BaseBootstrapper):
+    variant: ClassVar[Variant] = "rigid"
+
+
+class SpectrumBootstrapper(BaseBootstrapper):
+    variant: ClassVar[Variant] = "spectrum"
+
+
+class StandardBootstrapper(BaseBootstrapper):
+    variant: ClassVar[Variant] = "standard"

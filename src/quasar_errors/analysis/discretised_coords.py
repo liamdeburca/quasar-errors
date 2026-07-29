@@ -1,5 +1,6 @@
 from pydantic.dataclasses import dataclass
-from quasar_typing.numpy import FloatVector, FloatMatrix
+from quasar_typing.numpy import FloatMatrix, FloatVector
+
 
 @dataclass(frozen=True)
 class DiscretisedCoords:

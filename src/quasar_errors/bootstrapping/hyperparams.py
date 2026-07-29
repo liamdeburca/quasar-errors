@@ -1,13 +1,14 @@
 from dataclasses import field
-from pydantic.dataclasses import dataclass
 
-from quasar_typing.numpy import RandomState_
-from quasar_typing.astropy import FitterInstance
+from pydantic.dataclasses import dataclass
 from quasar_typing.misc import BootstrapType, VaryLines
+from quasar_typing.numpy import RandomState_
+from quasar_utils.setup import FitterKwargs
+
 
 @dataclass(frozen=True)
 class HyperParams:
-    fitter: FitterInstance
+    fitter_kwargs: FitterKwargs
     iterations: int
     random_state: RandomState_
     renew_rng: bool

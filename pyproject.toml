@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2", "Cython>=3.0", "numpy>=1.26"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -24,3 +24,9 @@ Repository = "https://github.com/liamdeburca/quasar-errors.git"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+line-length = 79
+
+[lint.pyupgrade]
+keep-runtime-typing = true

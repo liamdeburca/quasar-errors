@@ -1,7 +1,19 @@
 from typing import Self
-from numpy import zeros_like, inf, full, nan, float64, hypot, isfinite, full_like, log
-from quasar_typing.numpy import FloatVector, BoolVector
+
+from numpy import (
+    float64,
+    full,
+    full_like,
+    hypot,
+    inf,
+    isfinite,
+    log,
+    nan,
+    zeros_like,
+)
 from pydantic.dataclasses import dataclass
+from quasar_typing.numpy import BoolVector, FloatVector
+
 
 @dataclass(repr=False)
 class MeasureResult:
@@ -12,23 +24,22 @@ class MeasureResult:
         if self.unc is None:
             self.unc = zeros_like(self.val)
 
-    def __repr__(self) -> str:        
+    def __repr__(self) -> str:
         s = "MeasureResult("
         s += ", ".join(
-            f"{v:.1f}±{u:.1f}" 
-            if isfinite(v) else "nan"
+            f"{v:.1f}±{u:.1f}" if isfinite(v) else "nan"
             for v, u in zip(self.val, self.unc)
         )
         s += ")"
         return s
-    
+
     @classmethod
     def create_empty(
         cls,
         length: int,
     ) -> Self:
         return MeasureResult(full(length, nan, dtype=float64))
-        
+
     @classmethod
     def from_list_of_tuples(
         cls,
@@ -38,17 +49,17 @@ class MeasureResult:
     ) -> Self:
         length = length or len(tuple_list)
         res = cls.create_empty(length)
-        res.update_with_list_of_tuples(tuple_list, index=slice(0, length))            
+        res.update_with_list_of_tuples(tuple_list, index=slice(0, length))
         return res
 
     def update(
-        self, 
-        new_values: Self, 
+        self,
+        new_values: Self,
         index: int | slice | BoolVector | None = None,
     ) -> None:
         """
-        Modifies this instance's 'val' and 'unc' arrays, updating them with the 
-        values from the provided 'new_values' instance at the specified 
+        Modifies this instance's 'val' and 'unc' arrays, updating them with the
+        values from the provided 'new_values' instance at the specified
         index/indices.
         """
         if index is None:
@@ -64,7 +75,7 @@ class MeasureResult:
     ) -> None:
         """
         Modifies this instance's 'val' array, adding new values at the specified
-        index/indices. The 'unc' array is set to 0 for these indices, indicating 
+        index/indices. The 'unc' array is set to 0 for these indices, indicating
         no valid uncertainty for these values.
         """
         if index is None:
@@ -84,8 +95,8 @@ class MeasureResult:
         index: slice | BoolVector | None = None,
     ) -> None:
         """
-        Modifies this instance's 'val' and 'unc' arrays, adding new values at the 
-        specified index/indices. The new values are provided as a list of tuples, 
+        Modifies this instance's 'val' and 'unc' arrays, adding new values at the
+        specified index/indices. The new values are provided as a list of tuples,
         where each tuple contains a (value, uncertainty) pair.
         """
         if index is None:
@@ -100,13 +111,13 @@ class MeasureResult:
         self.unc[index] = [tup[1] for tup in new_values]
 
     def remove_negatives(self) -> None:
-        is_negative = (self.val < 0)
+        is_negative = self.val < 0
         self.val[is_negative] = 0
         self.unc[is_negative] = inf
 
     def to_tuple(self) -> tuple[FloatVector, FloatVector]:
         return (self.val, self.unc)
-    
+
     ### Arithmetic
 
     def copy(self) -> Self:
@@ -114,15 +125,15 @@ class MeasureResult:
             self.val.copy(),
             unc=self.unc.copy(),
         )
-    
+
     ## Addition
 
-    def __add__(self, num: float | int) -> Self:
+    def __add__(self, num: float) -> Self:
         copy = self.copy()
         copy += num
         return copy
-    
-    def __iadd__(self, other: float | int | Self) -> Self:
+
+    def __iadd__(self, other: float | Self) -> Self:
         """
         Inplace addition.
         """
@@ -130,7 +141,7 @@ class MeasureResult:
             mask = isfinite(self.val) & isfinite(other.val)
             num1 = self.val[mask]
             d_num1 = self.unc[mask]
-            
+
             num2 = other.val[mask]
             d_num2 = other.unc[mask]
 
@@ -144,18 +155,18 @@ class MeasureResult:
         else:
             self.val += other
         return self
-    
+
     ## Subtraction
 
-    def __sub__(self, num: float | int) -> Self:
+    def __sub__(self, num: float) -> Self:
         """
         Subtraction.
         """
         copy = self.copy()
         copy -= num
-        return copy  
-    
-    def __isub__(self, other: float | int | Self) -> Self:        
+        return copy
+
+    def __isub__(self, other: float | Self) -> Self:
         """
         Inplace subtraction.
         """
@@ -163,7 +174,7 @@ class MeasureResult:
             mask = isfinite(self.val) & isfinite(other.val)
             num1 = self.val[mask]
             d_num1 = self.unc[mask]
-            
+
             num2 = other.val[mask]
             d_num2 = other.unc[mask]
 
@@ -177,10 +188,10 @@ class MeasureResult:
         else:
             self.val -= other
         return self
-    
+
     ## Multiplication
 
-    def __mul__(self, num: float | int | Self) -> Self:
+    def __mul__(self, num: float | Self) -> Self:
         """
         Multiplication.
         """
@@ -188,10 +199,10 @@ class MeasureResult:
         copy *= num
         return copy
 
-    def __rmul__(self, num: float | int | Self) -> Self:
+    def __rmul__(self, num: float | Self) -> Self:
         return self * num
-        
-    def __imul__(self, other: float | int | Self) -> Self:
+
+    def __imul__(self, other: float | Self) -> Self:
         """
         Inplace multiplication.
         """
@@ -199,7 +210,7 @@ class MeasureResult:
             mask = isfinite(self.val) & isfinite(other.val)
             num1 = self.val[mask]
             d_num1 = self.unc[mask]
-            
+
             num2 = other.val[mask]
             d_num2 = other.unc[mask]
 
@@ -214,25 +225,25 @@ class MeasureResult:
             self.val *= other
             self.unc *= abs(other)
         return self
-                
+
     ## Division
-    
-    def __truediv__(self, other: float | int | Self) -> Self:
+
+    def __truediv__(self, other: float | Self) -> Self:
         copy = self.copy()
         copy /= other
         return copy
-    
-    def __rtruediv__(self, other: float | int | Self) -> Self:
-        copy = self.copy()**-1
+
+    def __rtruediv__(self, other: float | Self) -> Self:
+        copy = self.copy() ** -1
         copy *= other
         return copy
-    
-    def __itruediv__(self, other: float | int | Self) -> Self:
+
+    def __itruediv__(self, other: float | Self) -> Self:
         if isinstance(other, MeasureResult):
             mask = isfinite(self.val) & isfinite(other.val) & (other.val != 0)
             num = self.val[mask]
             d_num = self.unc[mask]
-            
+
             den = other.val[mask]
             d_den = other.unc[mask]
 
@@ -246,16 +257,16 @@ class MeasureResult:
         else:
             self.val /= other
             self.unc /= abs(other)
-        return self        
+        return self
 
     ## Power
-    
-    def __pow__(self, num: float | int) -> Self:
+
+    def __pow__(self, num: float) -> Self:
         copy = self.copy()
         copy **= num
         return copy
-        
-    def __ipow__(self, other: float | int | Self) -> Self:
+
+    def __ipow__(self, other: float | Self) -> Self:
         if isinstance(other, MeasureResult):
             mask = isfinite(self.val) & isfinite(other.val) & (self.val > 0)
 
@@ -264,7 +275,7 @@ class MeasureResult:
 
             new_val[mask] = self.val[mask] ** other.val[mask]
             new_unc[mask] = abs(new_val[mask]) * hypot(
-                other.unc[mask] * log(self.val[mask]), 
+                other.unc[mask] * log(self.val[mask]),
                 other.val[mask] * self.unc[mask] / self.val[mask],
             )
             self.val[:] = new_val
@@ -276,7 +287,9 @@ class MeasureResult:
             new_unc = full_like(self.unc, 0)
 
             new_val[mask] = self.val[mask] ** other
-            new_unc[mask] = abs(other * self.val[mask] ** (other - 1) * self.unc[mask])
+            new_unc[mask] = abs(
+                other * self.val[mask] ** (other - 1) * self.unc[mask]
+            )
 
             self.val[:] = new_val
             self.unc[:] = new_unc
@@ -288,4 +301,3 @@ class MeasureResult:
         copy = self.copy()
         copy.val = abs(copy.val)
         return copy
-    

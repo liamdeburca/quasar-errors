@@ -1,21 +1,23 @@
 __all__ = [
-    "second_moment",
-    "weighted_second_moment",
-    "third_moment",
-    "weighted_third_moment",
     "fourth_moment",
+    "second_moment",
+    "third_moment",
     "weighted_fourth_moment",
+    "weighted_second_moment",
+    "weighted_third_moment",
 ]
 
 from numpy import dot
 from quasar_typing.numpy import FloatVector
+
 
 def second_moment(
     first_moment: float | FloatVector,
     mu: float | FloatVector,
     sigma: float | FloatVector,
 ) -> float | FloatVector:
-    return sigma**2 + (mu - first_moment)**2
+    return sigma**2 + (mu - first_moment) ** 2
+
 
 def weighted_second_moment(
     weights: FloatVector,
@@ -23,19 +25,23 @@ def weighted_second_moment(
     mu: float | FloatVector,
     sigma: float | FloatVector,
 ) -> float | FloatVector:
-    return dot(weights, sigma**2 + (mu - first_moment)**2)
+    return dot(weights, sigma**2 + (mu - first_moment) ** 2)
+
 
 def third_moment(
     first_moment: float | FloatVector,
     second_moment: float | FloatVector,
-    mu  : float | FloatVector,
+    mu: float | FloatVector,
     sigma: float | FloatVector,
 ) -> float | FloatVector:
-    return 3 * mu * sigma**2 \
-        + mu**3 \
-        - 2 * first_moment * (mu**2 + sigma**2) \
-        + mu * first_moment**2 \
+    return (
+        3 * mu * sigma**2
+        + mu**3
+        - 2 * first_moment * (mu**2 + sigma**2)
+        + mu * first_moment**2
         - first_moment * second_moment
+    )
+
 
 def weighted_third_moment(
     weights: FloatVector,
@@ -45,9 +51,10 @@ def weighted_third_moment(
     sigma: float | FloatVector,
 ) -> float | FloatVector:
     return dot(
-        weights, 
+        weights,
         third_moment(first_moment, second_moment, mu, sigma),
     )
+
 
 def fourth_moment(
     first_moment: float | FloatVector,
@@ -66,6 +73,7 @@ def fourth_moment(
 
     return result
 
+
 def weighted_fourth_moment(
     weights: FloatVector,
     first_moment: float | FloatVector,
@@ -74,6 +82,6 @@ def weighted_fourth_moment(
     sigma: float | FloatVector,
 ) -> float | FloatVector:
     return dot(
-        weights, 
+        weights,
         fourth_moment(first_moment, third_moment, mu, sigma),
     )

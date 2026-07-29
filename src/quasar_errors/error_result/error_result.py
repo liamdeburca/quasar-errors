@@ -1,34 +1,40 @@
-from typing import Self, Callable, Iterator
-from numpy import zeros_like
+from collections.abc import Callable, Iterator
 from dataclasses import field
 from functools import cached_property
+from typing import Self
 
-from pydantic import validate_call
+from numpy import zeros_like
 from pydantic.dataclasses import dataclass
+from quasar_typing.numpy import FloatVector
+from quasar_utils.decorators import validate_call
 
 from ..model_samples import Sample
 
-from quasar_typing.numpy import FloatVector
 
 @dataclass(frozen=True, repr=False)
 class ErrorResult:
-    samples: tuple[Sample,...] = field(default_factory=tuple)
-    sample_weights: tuple[float,...] = field(default_factory=tuple)
+    samples: tuple[Sample, ...] = field(default_factory=tuple)
+    sample_weights: tuple[float, ...] = field(default_factory=tuple)
 
     @cached_property
-    def n_samples(self) -> int: return len(self.samples)
+    def n_samples(self) -> int:
+        return len(self.samples)
 
     @cached_property
-    def n_pix(self) -> int: return self.samples[0].x.size
+    def n_pix(self) -> int:
+        return self.samples[0].x.size
 
     @cached_property
-    def x(self) -> FloatVector: return self.samples[0].x
+    def x(self) -> FloatVector:
+        return self.samples[0].x
 
     @cached_property
-    def y(self) -> FloatVector: return self.samples[0].y
+    def y(self) -> FloatVector:
+        return self.samples[0].y
 
     @cached_property
-    def dy(self) -> FloatVector: return self.samples[0].dy
+    def dy(self) -> FloatVector:
+        return self.samples[0].dy
 
     def __repr__(self) -> str:
         _result = hex(id(self))
@@ -44,7 +50,7 @@ class ErrorResult:
 
     def __len__(self) -> int:
         return self.n_samples
-    
+
     @validate_call
     def sample_filter(
         self,
@@ -54,13 +60,13 @@ class ErrorResult:
         """
         ** PYDANTIC VALIDATED METHOD **
 
-        Returns a function that filters samples based on the target line or 
+        Returns a function that filters samples based on the target line or
         wave.
         """
         assert target_line or target_wave
         assert not (target_line and target_wave)
 
-        backup = zeros_like        
+        backup = zeros_like
         base_sample = self.samples[0]
         if target_wave is not None:
             _, extra = base_sample.splitAtWave.__wrapped__(
@@ -74,7 +80,7 @@ class ErrorResult:
                 nonlocal target_wave, backup
                 return sample.splitAtWave.__wrapped__(
                     sample,
-                    target_wave, 
+                    target_wave,
                     backup=backup,
                 )[0]
         else:
@@ -89,12 +95,12 @@ class ErrorResult:
                 nonlocal target_line, backup
                 return sample.splitAtLine.__wrapped__(
                     sample,
-                    target_line, 
+                    target_line,
                     backup=backup,
                 )[0]
 
         return sample_filter
-    
+
     @validate_call
     def isolate(
         self,

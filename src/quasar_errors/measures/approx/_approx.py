@@ -1,20 +1,21 @@
 __all__ = [
-    'get_intercept',
-    'get_width_at_height',
-    'get_quantile',
-    'get_peak',
-    'get_median_absolute_deviation',
-    'get_average_absolute_deviation',
+    "get_average_absolute_deviation",
+    "get_intercept",
+    "get_median_absolute_deviation",
+    "get_peak",
+    "get_quantile",
+    "get_width_at_height",
 ]
 
-from typing import Iterable
-from numpy import invert, argwhere, interp, append, dot, hypot
-from quasar_typing.numpy import FloatVector
-from quasar_typing.misc import FWHMStrategy
+from collections.abc import Iterable
 
 from numba import njit
+from numpy import append, argwhere, dot, hypot, interp, invert
+from quasar_typing.misc import FWHMStrategy
+from quasar_typing.numpy import FloatVector
 
 from ..utils import mirror_and_rebin
+
 
 @njit(fastmath=True)
 def u_yinterp(
@@ -26,7 +27,7 @@ def u_yinterp(
     """
     ** NUMBA OPTIMISED FUNCTION **
 
-    Interpolates the y-value at 'x' using the reference points 'xp' and 'yp', and 
+    Interpolates the y-value at 'x' using the reference points 'xp' and 'yp', and
     also propagates the uncertainty 'dyp' associated with 'yp'.
     """
     dx = xp[1] - xp[0]
@@ -38,6 +39,7 @@ def u_yinterp(
         hypot(f0 * dyp[0], f1 * dyp[1]),
     )
 
+
 @njit(fastmath=True)
 def u_xinterp(
     y: float,
@@ -48,7 +50,7 @@ def u_xinterp(
     """
     ** NUMBA OPTIMISED FUNCTION **
 
-    Interpolates the x-value at 'y' using the reference points 'xp' and 'yp', and 
+    Interpolates the x-value at 'y' using the reference points 'xp' and 'yp', and
     also propagates the uncertainty 'dyp' associated with 'yp'.
     """
     dx = xp[1] - xp[0]
@@ -61,6 +63,7 @@ def u_xinterp(
         abs(dx) / abs(dy) * hypot(f0 * dyp[0], f1 * dyp[1]),
     )
 
+
 @njit(fastmath=True)
 def get_intercept(
     x: FloatVector,
@@ -72,33 +75,33 @@ def get_intercept(
     """
     ** NUMBA OPTIMISED FUNCTION **
 
-    Calculates the x-value where the curve defined by (x, y) intersects the 
-    horizontal line at 'y_crit', and also propagates the uncertainty in this 
+    Calculates the x-value where the curve defined by (x, y) intersects the
+    horizontal line at 'y_crit', and also propagates the uncertainty in this
     x-value based on 'dy'.
     """
-    below = (y < y_crit)
+    below = y < y_crit
     if below.all():
         return (x[-1], dy[-1])
     elif not below.any():
         return (x[0], dy[0])
-    
+
     above = invert(below)
     indices = argwhere(below[:-1] & above[1:]).flatten()
 
-    if indices.size > 1 and strategy == 'average':
+    if indices.size > 1 and strategy == "average":
         idx_r = indices[0]
         left = u_xinterp(
-            y_crit, 
-            x[idx_r:idx_r+2],
-            y[idx_r:idx_r+2],
-            dy[idx_r:idx_r+2],
+            y_crit,
+            x[idx_r : idx_r + 2],
+            y[idx_r : idx_r + 2],
+            dy[idx_r : idx_r + 2],
         )
         idx_l = indices[-1]
         right = u_xinterp(
-            y_crit, 
-            x[idx_l:idx_l+2],
-            y[idx_l:idx_l+2],
-            dy[idx_l:idx_l+2],
+            y_crit,
+            x[idx_l : idx_l + 2],
+            y[idx_l : idx_l + 2],
+            dy[idx_l : idx_l + 2],
         )
 
         return (
@@ -106,17 +109,18 @@ def get_intercept(
             hypot(left[1], right[1]) / 2,
         )
 
-    if indices.size == 1 or strategy == 'widest':
+    if indices.size == 1 or strategy == "widest":
         idx = indices[0]
     else:
         idx = indices[-1]
 
     return u_xinterp(
-        y_crit, 
-        x[idx:idx+2],
-        y[idx:idx+2],
-        dy[idx:idx+2],
+        y_crit,
+        x[idx : idx + 2],
+        y[idx : idx + 2],
+        dy[idx : idx + 2],
     )
+
 
 @njit(fastmath=True)
 def get_width_at_height(
@@ -133,7 +137,7 @@ def get_width_at_height(
     Calculates the width of the curve defined by (x, y) at the height 'y_crit',
     and also propagates the uncertainty in this width based on 'dy'.
     """
-    is_left = (x < x_max)
+    is_left = x < x_max
     is_right = invert(is_left)
 
     left_edge = (x[0], 0)
@@ -161,6 +165,7 @@ def get_width_at_height(
         hypot(left_edge[1], right_edge[1]),
     )
 
+
 @njit(fastmath=True)
 def get_quantile(
     q: float | Iterable[float],
@@ -179,6 +184,7 @@ def get_quantile(
     cdf /= cdf[-1]
     return interp(q, cdf, edges)
 
+
 @njit(fastmath=True)
 def get_peak(
     x: FloatVector,
@@ -195,15 +201,16 @@ def get_peak(
     idx = y.argmax().flatten()[0]
     y_max = y[idx]
 
-    if idx == 0 or idx == x.size -1:
+    if idx == 0 or idx == x.size - 1:
         x_max = x[idx]
 
     if not ((idx == 0) or (idx == x.size - 1)):
-        x_l, x_r = edges[idx:idx+2]
-        y_l, _, y_r = y[idx-1:idx+2]
+        x_l, x_r = edges[idx : idx + 2]
+        y_l, _, y_r = y[idx - 1 : idx + 2]
         x_max = x_l + (x_r - x_l) * ((y_max - y_l) / (2 * y_max - y_l - y_r))
 
     return (x_max, y_max)
+
 
 def get_median_absolute_deviation(
     cen: float,
@@ -215,6 +222,7 @@ def get_median_absolute_deviation(
     cdf = append(0, vals.cumsum())
     cdf /= cdf[-1]
     return interp(0.5, cdf, edges)
+
 
 def get_average_absolute_deviation(
     cen: float,

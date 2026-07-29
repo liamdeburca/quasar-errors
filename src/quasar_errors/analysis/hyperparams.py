@@ -1,6 +1,7 @@
 from pydantic.dataclasses import dataclass
 from quasar_typing.misc import FWHMStrategy
 
+
 @dataclass(frozen=True)
 class HyperParams:
     res: int

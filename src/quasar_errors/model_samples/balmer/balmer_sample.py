@@ -1,39 +1,35 @@
-from typing import Self, Literal, ClassVar
-from numpy import array, zeros_like, float64
+from dataclasses import dataclass
+from typing import ClassVar, Literal, Self
 
-from pydantic import ConfigDict
-from pydantic.dataclasses import dataclass
-
-from quasar_core.modelling.balmer import BalmerEvaluate, evaluate_exact
-
+from numpy import array, float64, zeros_like
+from quasar_models._core.modeling.balmer import BalmerEvaluate, evaluate_exact
+from quasar_models._core.modeling.template.cytemplate import CyTemplate
 from quasar_models.balmer import (
-    BalmerModel, 
-    BalmerSeriesTemplate, BalmerContinuumTemplate,
+    BalmerContinuumTemplate,
+    BalmerModel,
+    BalmerSeriesTemplate,
 )
 from quasar_typing.numpy import FloatVector
 from quasar_typing.scipy import csr_matrix_
-
 from quasar_utils.decorators import validate_call
 
 from ..utils.base_sample import BaseSample
 
+
 @dataclass(frozen=True, kw_only=True)
 class BalmerSample(BaseSample):
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        ignored_types=(BalmerEvaluate,),
-    )
-
     flux: float
     fwhm: float
     ratio: float
 
-    name: str = ""
-
+    name: str
     continuum_template: BalmerContinuumTemplate
     series_template: BalmerSeriesTemplate
-    
-    interpolation_matrix: tuple[csr_matrix_, FloatVector] | None = None
+    continuum_cytemplate: CyTemplate | None
+    series_cytemplate: CyTemplate | None
+    n_scales: float
+    interpolation_matrix: tuple[csr_matrix_, FloatVector] | None
+
     evaluate_func: BalmerEvaluate = evaluate_exact
 
     model_type: ClassVar[Literal["ba"]] = "ba"
@@ -41,6 +37,7 @@ class BalmerSample(BaseSample):
     @classmethod
     @validate_call
     def fromBalmerModel(cls, model: BalmerModel) -> Self:
+        cytemplates = model.cytemplates        
         return BalmerSample(
             flux=model.flux.value,
             fwhm=model.fwhm.value,
@@ -48,36 +45,36 @@ class BalmerSample(BaseSample):
             name=model.name,
             continuum_template=model.continuum_template,
             series_template=model.series_template,
-            **model._interpolation_matrices,
+            continuum_cytemplate=cytemplates['continuum_cytemplate'],
+            series_cytemplate=cytemplates['series_cytemplate'],
+            interpolation_matrix=model.interpolation_matrix,
             evaluate_func=model.evaluate_func,
         )
-    
+
     def __call__(
-        self, 
-        x: float | FloatVector, 
+        self,
+        x: float | FloatVector,
         y: FloatVector | None = None,
     ) -> float | FloatVector:
         if isinstance(x, (int, float)):
             assert y is None
             _x = array([x], dtype=float64)
             return self(_x)[0]
-        
+
         if y is None:
             y = zeros_like(x, dtype=float64)
         return self.evaluate_func(
             x,
             self.flux, self.fwhm, self.ratio,
-            template_x=self.continuum_template.x,
-            continuum_fwhm=self.continuum_template.fwhm,
-            continuum_data=self.continuum_template.data / self.continuum_template.normalisation,
-            series_fwhm=self.series_template.fwhm,
-            series_data=self.series_template.data / self.series_template.normalisation,
-            sigma_res=self.continuum_template.sigma_res,
-            n_scales=self.continuum_template.n_scales,
+            continuum_template=self.continuum_template,
+            series_template=self.series_template,
+            continuum_cytemplate=self.continuum_cytemplate,
+            series_cytemplate=self.series_cytemplate,
+            n_scales=self.n_scales,
             interpolation_matrix=self.interpolation_matrix,
             y=y,
         )
-    
+
     @property
-    def sorting_key(self) -> tuple[float, float]: 
+    def sorting_key(self) -> tuple[float, float]:
         return (2.0, 0.0)

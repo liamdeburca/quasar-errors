@@ -1,29 +1,39 @@
 import logging
-from typing import Self, Iterable, Iterator, Callable, ClassVar
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import field
-from numpy import isfinite, zeros_like, float64, argwhere, invert, median, ascontiguousarray
+from typing import ClassVar, Self
+
+from numpy import (
+    argwhere,
+    ascontiguousarray,
+    float64,
+    invert,
+    isfinite,
+    median,
+    zeros_like,
+)
+from pydantic.dataclasses import dataclass
+from quasar_models import BalmerModel, GaussianModel, IronModel, PowerLawModel
+from quasar_models.line import _VProfileCopy
+from quasar_typing.astropy import CompoundModel_, Model_
+from quasar_typing.misc import BootstrapType, Pool_, Variant, VaryLines
+from quasar_typing.numpy import (
+    BoolVector,
+    CoordsTuple,
+    FloatVector,
+    RandomState_,
+)
+from quasar_utils.continuum_fit_result import ContinuumFitResult
+from quasar_utils.decorators import apply_info_to_method, validate_call
+from quasar_utils.setup import FitterKwargs, Info
 from tqdm import tqdm
 
-from pydantic.dataclasses import dataclass
-
-from quasar_utils.setup import Info
-from quasar_utils.decorators import validate_call, apply_info_to_method
-
-from quasar_models import PowerLawModel, IronModel, BalmerModel, GaussianModel
-from quasar_models.line import _VProfileCopy
-
-from quasar_typing.astropy import FitterInstance, Model_, CompoundModel_
-from quasar_typing.numpy import BoolVector, FloatVector, RandomState_, CoordsTuple
-from quasar_typing.misc import BootstrapType, Variant, VaryLines, Pool_
-
-from quasar_utils.continuum_fit_result import ContinuumFitResult
-
-from ..model_samples import Sample
-from ..error_result import ErrorResult, ErrorResultBuilder
-
-type MappedFunc = Callable[[FloatVector], Sample]
+from quasar_errors.bootstrapping.mapped_func import MappedFunc
+from quasar_errors.error_result import ErrorResult, ErrorResultBuilder
+from quasar_errors.model_samples import Sample
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class BaseBootstrapper:
@@ -31,14 +41,15 @@ class BaseBootstrapper:
     Core bootstrapping class designed for class inheritance.
 
     To create a new bootstrapper class, simply inherit from this class, decorate
-    the new class with @dataclass, and set the 'variant' class variable. 
+    the new class with @dataclass, and set the 'variant' class variable.
     """
+
     variant: ClassVar[Variant]
 
     x: FloatVector
     y: FloatVector
     dy: FloatVector
-    
+
     usable_pixels: BoolVector | None = None
     sigma_res: float | None = None
     info: Info = None
@@ -48,12 +59,17 @@ class BaseBootstrapper:
     fe: IronModel | CompoundModel_[IronModel] | None = None
     ba: BalmerModel | None = None
     hg: Model_ | None = None
-    em: GaussianModel | _VProfileCopy | CompoundModel_[GaussianModel | _VProfileCopy] | None = None
+    em: (
+        GaussianModel
+        | _VProfileCopy
+        | CompoundModel_[GaussianModel | _VProfileCopy]
+        | None
+    ) = None
 
     pool: Pool_ | None = None
 
     # Hyperparameters
-    fitter: FitterInstance | None = None
+    fitter_kwargs: FitterKwargs | None = None
     iterations: int | None = None
     random_state: RandomState_ | None = None
     renew_rng: bool | None = None
@@ -71,22 +87,25 @@ class BaseBootstrapper:
     fitted_model: Model_ | None = field(init=False)
     base_sample: Sample = field(init=False)
     mapped_func: MappedFunc = field(init=False)
-    mapper: Callable[[MappedFunc, Iterable[FloatVector]], Iterator[Sample]] \
-        = field(init=False)
+    mapper: Callable[[MappedFunc, Iterable[FloatVector]], Iterator[Sample]] = (
+        field(init=False)
+    )
 
     def __post_init__(self):
         # Resolve usable_pixels from data if not provided.
         if self.usable_pixels is None:
             self.usable_pixels = (
-                isfinite(self.x) & isfinite(self.y) & isfinite(self.dy)
+                isfinite(self.x)
+                & isfinite(self.y)
+                & isfinite(self.dy)
                 & (self.dy > 0)
             )
 
         if self.sigma_res is None:
-            self.sigma_res = self.info.loading['sigma_res']
+            self.sigma_res = self.info.loading["sigma_res"]
 
         self.setHyperParams(
-            fitter=self.fitter,
+            fitter_kwargs=self.fitter_kwargs,
             iterations=self.iterations,
             random_state=self.random_state,
             renew_rng=self.renew_rng,
@@ -106,7 +125,13 @@ class BaseBootstrapper:
         self.fitted_model = self._compute_fitted_model()
         self.base_sample = self._compute_base_sample()
         self.mapped_func = self._compute_mapped_func()
-        self.mapper = map if self.pool is None else self.pool.map
+
+        if self.pool is None:
+            self.mapper = map
+        else:
+            self.mapper = (
+                self.pool.map if self.tqdm_disable else self.pool.imap
+            )
 
         logger.debug(
             "%d/%d usable pixels, bootstrap_type=%r, iterations=%d.",
@@ -125,13 +150,15 @@ class BaseBootstrapper:
         if self.full_model is None:
             logger.debug(
                 "creating base sample w/o model; variant=%r, npix=%d.",
-                self.variant, x.size,
+                self.variant,
+                x.size,
             )
             return Sample.fromSpectrumSample(x, y, dy)
 
         logger.debug(
             "creating base sample w/ model; variant=%r, npix=%d.",
-            self.variant, x.size,
+            self.variant,
+            x.size,
         )
         return Sample.fromModelSample(x, y, dy, model=self.full_model)
 
@@ -160,14 +187,16 @@ class BaseBootstrapper:
         """
         The model to be refitted at each iteration.
         """
-        def filter_func(m: Model_ | None) -> bool: return m is not None
+
+        def filter_func(m: Model_ | None) -> bool:
+            return m is not None
 
         match self.variant:
-            case 'spectrum':
+            case "spectrum":
                 logger.debug("variant=%r, no refitting.", self.variant)
                 bgs = ()
                 fitted_model = None
-            case 'standard':
+            case "standard":
                 if self.full_model is None:
                     msg = "Bootstrapping variant 'standard' requires a fitted \
                         model."
@@ -177,11 +206,12 @@ class BaseBootstrapper:
                 logger.debug("variant=%r, refitting full model.", self.variant)
                 bgs = ()
                 fitted_model = self.full_model
-            case 'flexible':
+            case "flexible":
                 if self.pl is None or self.em is None:
                     msg = "Bootstrapping variant 'flexible' requires both a \
-                        power law and an emission line model. Missing: {}" \
-                        .format({'pl': self.pl is None, 'em': self.em is None})
+                        power law and an emission line model. Missing: {}".format(
+                        {"pl": self.pl is None, "em": self.em is None}
+                    )
                     logger.critical(msg)
                     raise ValueError(msg)
                 if self.cfit is None:
@@ -189,7 +219,7 @@ class BaseBootstrapper:
                         continuum fit result."
                     logger.critical(msg)
                     raise ValueError(msg)
-                
+
                 pl = self.pl.copy()
 
                 s = self.cfit.std[0]
@@ -199,8 +229,12 @@ class BaseBootstrapper:
                 )
                 s = self.cfit.std[1]
                 pl.alpha.bounds = (
-                    max(pl.alpha.bounds[0], pl.alpha.value - self.n_sigmas * s),
-                    min(pl.alpha.bounds[1], pl.alpha.value + self.n_sigmas * s),
+                    max(
+                        pl.alpha.bounds[0], pl.alpha.value - self.n_sigmas * s
+                    ),
+                    min(
+                        pl.alpha.bounds[1], pl.alpha.value + self.n_sigmas * s
+                    ),
                 )
 
                 bgs = filter(filter_func, (self.fe, self.ba, self.hg))
@@ -208,12 +242,12 @@ class BaseBootstrapper:
                 logger.debug(
                     "variant=%r, refitting pl + em; background: fe=%r, ba=%r, "
                     "hg=%r.",
-                    self.variant, 
-                    self.fe is not None, 
-                    self.ba is not None, 
+                    self.variant,
+                    self.fe is not None,
+                    self.ba is not None,
                     self.hg is not None,
                 )
-            case 'rigid':
+            case "rigid":
                 if self.em is None:
                     msg = "Bootstrapping variant 'rigid' requires an emission \
                         line model."
@@ -222,7 +256,7 @@ class BaseBootstrapper:
 
                 bgs = filter(filter_func, (self.pl, self.fe, self.ba, self.hg))
                 ms = (self.em,) if self.em.n_submodels == 1 else self.em
-                
+
                 submodels = []
                 extra_bgs = []
                 for m in ms:
@@ -244,7 +278,8 @@ class BaseBootstrapper:
                     logger.debug(
                         "variant=%r, refitting %d/%d emission "
                         "line(s); vary_lines=%r.",
-                        self.variant, len(submodels),
+                        self.variant,
+                        len(submodels),
                         len(submodels) + len(extra_bgs),
                         self.vary_lines,
                     )
@@ -261,38 +296,30 @@ class BaseBootstrapper:
         function that creates a 'Sample' object from a resampled flux density
         array.
         """
-        x = ascontiguousarray(self.x[self.usable_pixels])
-        dy = ascontiguousarray(self.dy[self.usable_pixels])
-        y_bg = ascontiguousarray(self.y_bg[self.usable_pixels])
+        args = (
+            x := ascontiguousarray(self.x[self.usable_pixels]),
+            ascontiguousarray(self.dy[self.usable_pixels]),
+            ascontiguousarray(self.y_bg[self.usable_pixels]),
+        )
+        kwargs = {"variant": self.variant}
 
-        if self.variant == 'spectrum':
+        if self.variant == "spectrum":
             logger.debug(
                 "variant=%r, npix=%d, building function w/o fitting",
-                self.variant, x.size,
+                self.variant,
+                x.size,
             )
-            def mapped_func_inner(y: FloatVector) -> Sample:
-                nonlocal x, dy, y_bg
-                return Sample.fromSpectrumSample(
-                    x, y - y_bg, dy, weight=1.0,
-                )
-
         else:
             logger.debug(
                 "variant=%r, npix=%d, building function w/ fitting",
-                self.variant, x.size,
+                self.variant,
+                x.size,
             )
-            model = self.fitted_model.copy()
-            fitter = self.fitter
-            def mapped_func_inner(y: FloatVector) -> Sample:
-                nonlocal x, dy, y_bg, model, fitter
-                _y = y - y_bg
-                _ = fitter(model, x, _y, dy, inplace=True)
-                return Sample.fromModelSample(
-                    x, _y, dy, model, weight=1.0,
-                )
+            kwargs["model"] = self.fitted_model.copy()
+            kwargs["fitter"] = self.fitter
 
-        return mapped_func_inner
-    
+        return MappedFunc(*args, **kwargs)
+
     @property
     def coords(self) -> CoordsTuple:
         return (
@@ -301,11 +328,11 @@ class BaseBootstrapper:
             ascontiguousarray(self.dy[self.usable_pixels]),
         )
 
-    @apply_info_to_method(subjects=('nonlinear', 'error'))
+    @apply_info_to_method(subjects=("nonlinear", "error"))
     def setHyperParams(
         self,
         *,
-        fitter: FitterInstance | None = None,
+        fitter_kwargs: FitterKwargs | None = None,
         iterations: int | None = None,
         random_state: RandomState_ | None = None,
         renew_rng: bool | None = None,
@@ -322,7 +349,7 @@ class BaseBootstrapper:
         falling back to defaults drawn from 'self.info' via
         @apply_info_to_method for any argument left as None:
         """
-        self.fitter = fitter
+        self.fitter_kwargs = fitter_kwargs
         self.iterations = iterations
         self.random_state = random_state
         self.renew_rng = renew_rng
@@ -377,13 +404,14 @@ class BaseBootstrapper:
         """
         logger.debug(
             "%d/%d non-usable pixel(s).",
-            invert(self.usable_pixels).sum(), len(self.usable_pixels),
+            invert(self.usable_pixels).sum(),
+            len(self.usable_pixels),
         )
 
         if self.usable_pixels.all():
             return self
 
-        if self.bootstrap_type == 'frequentist':
+        if self.bootstrap_type == "frequentist":
             logger.debug(
                 "bootstrap_type=%r, skipping replacement.",
                 self.bootstrap_type,
@@ -411,7 +439,7 @@ class BaseBootstrapper:
             first = valid_indices[0]
             powers = invalid_indices - first
 
-            self.x[invalid_x] = self.x[first] * (1 + self.sigma_res)**powers
+            self.x[invalid_x] = self.x[first] * (1 + self.sigma_res) ** powers
 
         valid_y = isfinite(self.y) & self.usable_pixels
         invalid_y = invert(valid_y)
@@ -429,7 +457,7 @@ class BaseBootstrapper:
             msg += f"replacing {invalid_dy.sum()} missing 'dy' value(s), "
             self.dy[invalid_dy] = median(self.dy[valid_dy])
 
-        if self.bootstrap_type == 'spectrum' and invalid_y.any():
+        if self.bootstrap_type == "spectrum" and invalid_y.any():
             # When both the flux density and flux density uncertainties
             # have been replaced.
             self.dy[invalid_y] *= 2**0.5
@@ -461,7 +489,7 @@ class BaseBootstrapper:
         rng = self.random_state
 
         match self.bootstrap_type:
-            case 'frequentist':
+            case "frequentist":
                 if self.full_model is None:
                     msg = "Bootstrap type 'frequentist' requires a fitted \
                         model."
@@ -472,10 +500,11 @@ class BaseBootstrapper:
                 # Shuffle data-model differences
                 m = self.full_model(x)
                 diff = y - m
+
                 def f() -> FloatVector:
                     return m + rng.choice(diff, size=n_points, replace=True)
 
-            case 'model':
+            case "model":
                 if self.full_model is None:
                     msg = "Bootstrap type 'model' requires a fitted model."
                     logger.critical(msg)
@@ -484,11 +513,13 @@ class BaseBootstrapper:
                 logger.debug("adding noise to fitted model.")
                 # Add noise to fitted model
                 m = self.full_model(x)
+
                 def f() -> FloatVector:
                     return rng.normal(loc=m, scale=dy)
 
             case _:
                 logger.debug("adding noise to observed spectrum.")
+
                 # Add noise to spectrum
                 def f() -> FloatVector:
                     return rng.normal(loc=y, scale=dy)
@@ -500,17 +531,18 @@ class BaseBootstrapper:
         Runs the bootstrapping procedure, returning a list of 'Sample' objects
         generated from the resampled flux density arrays.
         """
-        if self.tqdm_disable:
-            loop = self.generateSamples()
-        else:
-            loop = tqdm(
-                self.generateSamples(), 
-                total=self.iterations, 
-                desc=f"Bootstrapping ({self.variant})",
-                unit='sample',
-                leave=self.tqdm_leave,
+        with self.mapped_func as func:
+            samples = list(
+                tqdm(
+                    self.mapper(func, self.generateSamples()),
+                    total=self.iterations,
+                    desc=f"Bootstrapping ({self.variant})",
+                    unit="sample",
+                    leave=self.tqdm_leave,
+                    disable=self.tqdm_disable,
+                )
             )
-        return list(self.mapper(self.mapped_func, loop))
+        return samples
 
     @validate_call
     def toErrorResult(
