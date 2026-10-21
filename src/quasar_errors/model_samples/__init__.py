@@ -1,23 +1,27 @@
-"""
-This submodule contains dataclasses designed to represent submodels used to
-fit quasar spectra. They act as simpler, imutable versions of AstroPy models,
-but with less functionality and weight, making them suitable for error
-estimation where many samples are generated.
-"""
+import sys
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "BalmerSample",
-    "GaussianSample",
-    "GaussianSampleList",
-    "HostGalaxySample",
-    "IronSample",
-    "IronSampleList",
-    "PowerLawSample",
-    "Sample",
-]
-from .balmer import BalmerSample
-from .continuum import PowerLawSample
-from .host import HostGalaxySample
-from .iron import IronSample, IronSampleList
-from .line import GaussianSample, GaussianSampleList
-from .sample import Sample
+from lazy_imports import LazyImporter
+
+_import_structure: dict[str, list[str]] = {
+    "balmer": ["BalmerSample"],
+    "continuum": ["PowerLawSample"],
+    "host": ["HostGalaxySample"],
+    "iron": ["IronSample", "IronSampleList"],
+    "line": ["GaussianSample", "GaussianSampleList"],
+    "sample": ["Sample"],
+}
+
+if TYPE_CHECKING:
+    from .balmer import BalmerSample  # noqa: F401
+    from .continuum import PowerLawSample  # noqa: F401
+    from .host import HostGalaxySample  # noqa: F401
+    from .iron import IronSample, IronSampleList  # noqa: F401
+    from .line import GaussianSample, GaussianSampleList  # noqa: F401
+    from .sample import Sample  # noqa: F401
+else:
+    sys.modules[__name__] = LazyImporter(
+        __name__,
+        __file__,
+        _import_structure,
+    )

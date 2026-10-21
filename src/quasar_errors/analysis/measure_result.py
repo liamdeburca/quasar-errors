@@ -1,56 +1,259 @@
-from typing import Self
+from abc import ABC, abstractmethod
+from typing import Any, Self
 
-from numpy import (
-    float64,
-    full,
-    full_like,
-    hypot,
-    inf,
-    isfinite,
-    log,
-    nan,
-    zeros_like,
-)
-from pydantic.dataclasses import dataclass
+import numpy as np
+import pydantic
+from astropy.constants import c
+from astropy.units import Quantity, Unit, dimensionless_unscaled
+from quasar_typing.astropy import CompositeUnitType, UnitType
 from quasar_typing.numpy import BoolVector, FloatVector
 
 
-@dataclass(repr=False)
-class MeasureResult:
-    val: FloatVector
-    unc: FloatVector | None = None
+class _MeasureResult(ABC):
+    @abstractmethod
+    def __init__(
+        self, 
+        val: FloatVector, 
+        unc: FloatVector, 
+        unit: UnitType | CompositeUnitType = dimensionless_unscaled,
+    ) -> None:
+        ...
 
-    def __post_init__(self):
-        if self.unc is None:
-            self.unc = zeros_like(self.val)
 
     def __repr__(self) -> str:
-        s = "MeasureResult("
+        s = f"{self.__class__.__name__}("
         s += ", ".join(
-            f"{v:.1f}±{u:.1f}" if isfinite(v) else "nan"
+            f"{v:.1f}±{u:.1f}" if np.isfinite(v) else "nan"
             for v, u in zip(self.val, self.unc)
         )
-        s += ")"
-        return s
+        return s + ")"
+
 
     @classmethod
     def create_empty(
         cls,
         length: int,
+        unit: UnitType | CompositeUnitType = dimensionless_unscaled,
     ) -> Self:
-        return MeasureResult(full(length, nan, dtype=float64))
+        if unit is None:
+            unit = dimensionless_unscaled
 
+        return cls(
+            np.full(length, np.nan, dtype=np.float64),
+            np.full(length, 0.0, dtype=np.float64),
+            unit = Unit(unit)
+        )
+        
     @classmethod
     def from_list_of_tuples(
         cls,
         tuple_list: list[tuple[float, float]],
         *,
         length: int | None = None,
+        unit: UnitType | CompositeUnitType = dimensionless_unscaled,
     ) -> Self:
+        n_tups = len(tuple_list)
         length = length or len(tuple_list)
-        res = cls.create_empty(length)
-        res.update_with_list_of_tuples(tuple_list, index=slice(0, length))
-        return res
+
+        if length > n_tups:
+            val = np.full(length, np.nan, dtype=np.float64)
+            unc = np.full(length, 0.0, dtype=np.float64)
+
+            val[:n_tups] = [tup[0] for tup in tuple_list]
+            unc[:n_tups] = [tup[1] for tup in tuple_list]
+        else:
+            val = np.fromiter(
+                (tup[0] for tup in tuple_list), 
+                dtype=np.float64, 
+                count=length,
+            )
+            unc = np.fromiter(
+                (tup[1] for tup in tuple_list), 
+                dtype=np.float64, 
+                count=length,
+            )
+
+        return cls(val, unc, unit=Unit(unit))
+
+    def to_tuple(self) -> tuple[FloatVector, FloatVector]:
+        return (self.val, self.unc)
+
+    def copy(self, freeze: bool = False) -> "FrozenMeasureResult | MeasureResult":
+        cls = FrozenMeasureResult if freeze else MeasureResult
+        return cls(self.val.copy(), self.unc.copy(), unit=self.unit)
+
+    def freeze(self) -> "FrozenMeasureResult":
+        if isinstance(self, FrozenMeasureResult):
+            return self
+        return self.copy(freeze=True)
+
+    def unfreeze(self) -> "MeasureResult":
+        return self.copy(freeze=False)
+
+    def _set_unit(self, unit: UnitType | CompositeUnitType | Any) -> None:
+        """Forcefully modify the 'unit' attribute."""
+        object.__setattr__(self, "unit", Unit(unit))
+
+    def to(self, unit: UnitType | CompositeUnitType | Any) -> Self:
+        unit = Unit(unit)
+        factor = (1.0 * self.unit).to(unit).value
+        return self.__class__(
+            self.val * factor,
+            self.unc * abs(factor),
+            unit=unit,
+        )
+
+    def to_c(self) -> Self:
+        """Convert a unitless MeasureResult ratio to a velocity in km/s."""
+        out = self.to(1)
+        out: MeasureResult = self.to(1) * c.to("km/s").value
+        out._set_unit("km/s")
+        return out.freeze() if isinstance(self, FrozenMeasureResult) else out
+        
+    def __add__(self, num: float | Quantity | Self) -> Self:
+        """
+        Add a number or another MeasureResult to this MeasureResult. The unit of 
+        the result will be identical to the unit of the left MeasureResult.
+        """
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        unc = np.full(self.unc.size, 0.0, dtype=np.float64)
+        mask = np.isfinite(self.val)
+
+        if isinstance(num, (float, int)):
+            val[mask] = self.val[mask] + num
+            unc[mask] = self.unc[mask]
+        elif isinstance(num, Quantity):
+            num = num.to(self.unit)
+            val[mask] = self.val[mask] + num.value
+            unc[mask] = self.unc[mask]
+        else:
+            mask &= np.isfinite(num.val)
+            num = num.to(self.unit)
+            val[mask] = self.val[mask] + num.val[mask]
+            unc[mask] = np.hypot(self.unc[mask], num.unc[mask])
+
+        return self.__class__(val, unc, unit=self.unit)  
+
+    def __sub__(self, num: float | Quantity | Self) -> Self:
+        """
+        Subtraction.
+        """
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        unc = np.full(self.unc.size, 0.0, dtype=np.float64)
+        mask = np.isfinite(self.val)
+
+        if isinstance(num, (float, int)):
+            val[mask] = self.val[mask] - num
+            unc[mask] = self.unc[mask]
+        elif isinstance(num, Quantity):
+            num = num.to(self.unit)
+            val[mask] = self.val[mask] - num.value
+            unc[mask] = self.unc[mask]
+        else:
+            mask &= np.isfinite(num.val)
+            num = num.to(self.unit)
+            val[mask] = self.val[mask] - num.val[mask]
+            unc[mask] = np.hypot(self.unc[mask], num.unc[mask])
+
+        return self.__class__(val, unc, unit=self.unit)
+    
+    def __mul__(self, num: float | Quantity | Self) -> Self:
+        """
+        Multiplication.
+        """
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        unc = np.full(self.unc.size, 0.0, dtype=np.float64)
+        mask = np.isfinite(self.val)
+
+        if isinstance(num, (float, int)):
+            val[mask] = self.val[mask] * num
+            unc[mask] = self.unc[mask] * abs(num)
+            unit = self.unit
+        elif isinstance(num, Quantity):
+            val[mask] = self.val[mask] * num.value
+            unc[mask] = self.unc[mask] * abs(num.value)
+            unit = self.unit * num.unit
+        else:
+            mask &= np.isfinite(num.val)
+            val[mask] = self.val[mask] * num.val[mask]
+            unc[mask] = np.hypot(
+                num.val[mask] * self.unc[mask],
+                num.unc[mask] * self.val[mask],
+            )
+            unit = self.unit * num.unit
+
+        return self.__class__(val, unc, unit=unit)
+
+    def __rmul__(self, num: float | Quantity | Self) -> Self:
+        return self * num
+
+    def __truediv__(self, num: float | Quantity | Self) -> Self:
+        if isinstance(num, (float, int, Quantity)):
+            return self * (1 / num)
+
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        unc = np.full(self.unc.size, 0.0, dtype=np.float64)
+        mask = np.isfinite(self.val) & np.isfinite(num.val)
+
+        val[mask] = self.val[mask] / num.val[mask]
+        unc[mask] = np.hypot(
+            self.unc[mask] / num.val[mask],
+            self.val[mask] * num.unc[mask] / num.val[mask]**2,
+        )
+        unit = self.unit / num.unit
+
+        return self.__class__(val, unc, unit=unit)
+
+    def __rtruediv__(self, num: float | Quantity | Self) -> Self:
+        if isinstance(num, (float, int, Quantity)):
+            return num * (self ** -1)
+        
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        unc = np.full(self.unc.size, 0.0, dtype=np.float64)
+        mask = np.isfinite(self.val) & np.isfinite(num.val)
+
+        val[mask] = num.val[mask] / self.val[mask]
+        unc[mask] = np.hypot(
+            num.unc[mask] / self.val[mask],
+            num.val[mask] * self.unc[mask] / self.val[mask]**2,
+        )
+        unit = num.unit / self.unit
+
+        return self.__class__(val, unc, unit=unit)
+
+    def __pow__(self, num: float) -> Self:
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        unc = np.full(self.unc.size, 0.0, dtype=np.float64)
+        mask = np.isfinite(self.val)
+
+        if num == 0:
+            val[mask] = 1.0
+            unc[mask] = 0.0
+            unit = dimensionless_unscaled
+        else:
+            val[mask] = self.val[mask] ** num
+            unc[mask] = abs(num * self.val[mask] ** (num - 1) * self.unc[mask])
+            unit = self.unit ** num
+
+        return self.__class__(val, unc, unit=unit)
+
+    def __abs__(self) -> Self:
+        val = np.full(self.val.size, np.nan, dtype=np.float64)
+        mask = np.isfinite(self.val)
+        val[mask] = abs(self.val[mask])
+        return self.__class__(val, self.unc.copy(), unit=self.unit)
+
+@pydantic.dataclasses.dataclass(frozen=True)
+class FrozenMeasureResult(_MeasureResult):
+    val: FloatVector
+    unc: FloatVector
+    unit: UnitType | CompositeUnitType = dimensionless_unscaled
+
+@pydantic.dataclasses.dataclass
+class MeasureResult(_MeasureResult):
+    val: FloatVector
+    unc: FloatVector
+    unit: UnitType | CompositeUnitType = dimensionless_unscaled
 
     def update(
         self,
@@ -113,191 +316,48 @@ class MeasureResult:
     def remove_negatives(self) -> None:
         is_negative = self.val < 0
         self.val[is_negative] = 0
-        self.unc[is_negative] = inf
-
-    def to_tuple(self) -> tuple[FloatVector, FloatVector]:
-        return (self.val, self.unc)
+        self.unc[is_negative] = np.inf
 
     ### Arithmetic
 
-    def copy(self) -> Self:
-        return MeasureResult(
-            self.val.copy(),
-            unc=self.unc.copy(),
-        )
-
-    ## Addition
-
-    def __add__(self, num: float) -> Self:
-        copy = self.copy()
-        copy += num
-        return copy
-
-    def __iadd__(self, other: float | Self) -> Self:
+    def __iadd__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace addition.
         """
-        if isinstance(other, MeasureResult):
-            mask = isfinite(self.val) & isfinite(other.val)
-            num1 = self.val[mask]
-            d_num1 = self.unc[mask]
-
-            num2 = other.val[mask]
-            d_num2 = other.unc[mask]
-
-            new_val = full_like(self.val, nan)
-            new_unc = full_like(self.unc, 0)
-            new_val[mask] = num1 + num2
-            new_unc[mask] = hypot(d_num1, d_num2)
-
-            self.val[:] = new_val
-            self.unc[:] = new_unc
-        else:
-            self.val += other
+        temp = self + other
+        self.val[:] = temp.val
+        self.unc[:] = temp.unc
         return self
 
-    ## Subtraction
-
-    def __sub__(self, num: float) -> Self:
-        """
-        Subtraction.
-        """
-        copy = self.copy()
-        copy -= num
-        return copy
-
-    def __isub__(self, other: float | Self) -> Self:
+    def __isub__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace subtraction.
         """
-        if isinstance(other, MeasureResult):
-            mask = isfinite(self.val) & isfinite(other.val)
-            num1 = self.val[mask]
-            d_num1 = self.unc[mask]
-
-            num2 = other.val[mask]
-            d_num2 = other.unc[mask]
-
-            new_val = full_like(self.val, nan)
-            new_unc = full_like(self.unc, 0)
-            new_val[mask] = num1 - num2
-            new_unc[mask] = hypot(d_num1, d_num2)
-
-            self.val[:] = new_val
-            self.unc[:] = new_unc
-        else:
-            self.val -= other
+        temp = self - other
+        self.val[:] = temp.val
+        self.unc[:] = temp.unc
         return self
 
-    ## Multiplication
-
-    def __mul__(self, num: float | Self) -> Self:
-        """
-        Multiplication.
-        """
-        copy = self.copy()
-        copy *= num
-        return copy
-
-    def __rmul__(self, num: float | Self) -> Self:
-        return self * num
-
-    def __imul__(self, other: float | Self) -> Self:
+    def __imul__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace multiplication.
         """
-        if isinstance(other, MeasureResult):
-            mask = isfinite(self.val) & isfinite(other.val)
-            num1 = self.val[mask]
-            d_num1 = self.unc[mask]
-
-            num2 = other.val[mask]
-            d_num2 = other.unc[mask]
-
-            new_val = full_like(self.val, nan)
-            new_unc = full_like(self.unc, 0)
-            new_val[mask] = num1 * num2
-            new_unc[mask] = hypot(num2 * d_num1, num1 * d_num2)
-
-            self.val[:] = new_val
-            self.unc[:] = new_unc
-        else:
-            self.val *= other
-            self.unc *= abs(other)
+        temp = self * other
+        self.val[:] = temp.val
+        self.unc[:] = temp.unc
         return self
 
-    ## Division
-
-    def __truediv__(self, other: float | Self) -> Self:
-        copy = self.copy()
-        copy /= other
-        return copy
-
-    def __rtruediv__(self, other: float | Self) -> Self:
-        copy = self.copy() ** -1
-        copy *= other
-        return copy
-
-    def __itruediv__(self, other: float | Self) -> Self:
-        if isinstance(other, MeasureResult):
-            mask = isfinite(self.val) & isfinite(other.val) & (other.val != 0)
-            num = self.val[mask]
-            d_num = self.unc[mask]
-
-            den = other.val[mask]
-            d_den = other.unc[mask]
-
-            new_val = full_like(self.val, nan)
-            new_unc = full_like(self.unc, 0)
-            new_val[mask] = num / den
-            new_unc[mask] = hypot(d_num / den, num / den**2 * d_den)
-
-            self.val[:] = new_val
-            self.unc[:] = new_unc
-        else:
-            self.val /= other
-            self.unc /= abs(other)
+    def __itruediv__(self, other: float | Quantity | Self) -> Self:
+        """
+        Inplace true division.
+        """
+        temp = self / other
+        self.val[:] = temp.val
+        self.unc[:] = temp.unc
         return self
 
-    ## Power
-
-    def __pow__(self, num: float) -> Self:
-        copy = self.copy()
-        copy **= num
-        return copy
-
-    def __ipow__(self, other: float | Self) -> Self:
-        if isinstance(other, MeasureResult):
-            mask = isfinite(self.val) & isfinite(other.val) & (self.val > 0)
-
-            new_val = full_like(self.val, nan)
-            new_unc = full_like(self.unc, 0)
-
-            new_val[mask] = self.val[mask] ** other.val[mask]
-            new_unc[mask] = abs(new_val[mask]) * hypot(
-                other.unc[mask] * log(self.val[mask]),
-                other.val[mask] * self.unc[mask] / self.val[mask],
-            )
-            self.val[:] = new_val
-            self.unc[:] = new_unc
-        else:
-            mask = isfinite(self.val) & (self.val > 0)
-
-            new_val = full_like(self.val, nan)
-            new_unc = full_like(self.unc, 0)
-
-            new_val[mask] = self.val[mask] ** other
-            new_unc[mask] = abs(
-                other * self.val[mask] ** (other - 1) * self.unc[mask]
-            )
-
-            self.val[:] = new_val
-            self.unc[:] = new_unc
+    def __ipow__(self, other: float) -> Self:
+        temp = self ** other
+        self.val[:] = temp.val
+        self.unc[:] = temp.unc
         return self
-
-    ## Absolute value
-
-    def __abs__(self) -> Self:
-        copy = self.copy()
-        copy.val = abs(copy.val)
-        return copy

@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from functools import cached_property
 from typing import ClassVar, Literal, Self
 
-from numpy import array, float64, zeros_like
+import numpy as np
+import pydantic
 from quasar_models._core.modeling.host import (
     HostGalaxyEvaluate,
     evaluate_exact,
@@ -12,39 +13,75 @@ from quasar_models.host import (
     HostGalaxyTemplate,
 )
 from quasar_typing.numpy import FloatVector
-from quasar_typing.scipy import csr_matrix_
-from quasar_utils.decorators import validate_call
+from quasar_typing.scipy import CSRMatrix
 
 from ..utils.base_sample import BaseSample
 
 
-@dataclass(frozen=True, kw_only=True)
 class HostGalaxySample(BaseSample):
+    model_config = pydantic.ConfigDict(
+        frozen=True, 
+        extra="forbid", 
+        arbitrary_types_allowed=True,
+    )
+    
     flux: float
     fwhm: float
 
     name: str
     template: HostGalaxyTemplate
-    cytemplate: CyTemplate | None
+    cytemplate: CyTemplate
     n_scales: float
-    interpolation_matrix: tuple[csr_matrix_, FloatVector] | None
+    interpolation_matrix: tuple[CSRMatrix, FloatVector] | None
     
     evaluate_func: HostGalaxyEvaluate = evaluate_exact
 
     model_type: ClassVar[Literal["hg"]] = "hg"
 
+    @cached_property
+    def parameters(self) -> FloatVector:
+        return np.array([self.flux, self.fwhm], dtype=np.float64)
+
     @classmethod
-    @validate_call
+    def _validate_is_prepared(cls, model: HostGalaxyModel) -> None:
+        if model.cytemplates["cytemplate"] is None:
+            raise ValueError(
+                "Host galaxy model instance was not properly prepared prior to "
+                "error estimation! This could be hugely inefficient."
+            )
+
+    @classmethod
+    @pydantic.validate_call
     def fromHostGalaxyModel(cls, model: HostGalaxyModel) -> Self:
+        cls._validate_is_prepared(model)
         return HostGalaxySample(
             flux=model.flux.value,
             fwhm=model.fwhm.value,
             name=model.name,
             template=model.template,
-            cytemplate=model.cytemplates['cytemplate'],
             n_scales=model.n_scales,
             interpolation_matrix=model.interpolation_matrix,
             evaluate_func=model.evaluate_func,
+            **model.cytemplates,
+        )
+
+    @classmethod
+    @pydantic.validate_call
+    def fromParamVector(
+        cls,
+        param_vector: FloatVector,
+        model: HostGalaxyModel,
+    ) -> Self:
+        cls._validate_is_prepared(model)
+        return HostGalaxySample(
+            flux=param_vector[0],
+            fwhm=param_vector[1],
+            name=model.name,
+            template=model.template,
+            n_scales=model.n_scales,
+            interpolation_matrix=model.interpolation_matrix,
+            evaluate_func=model.evaluate_func,
+            **model.cytemplates,
         )
 
     def __call__(
@@ -54,17 +91,16 @@ class HostGalaxySample(BaseSample):
     ) -> float | FloatVector:
         if isinstance(x, (int, float)):
             assert y is None
-            _x = array([x], dtype=float64)
+            _x = np.array([x], dtype=np.float64)
             return self(_x)[0]
 
         if y is None:
-            y = zeros_like(x, dtype=float64)
+            y = np.zeros_like(x, dtype=np.float64)
 
         return self.evaluate_func(
             x,
             self.flux, self.fwhm,
-            template=self.template,
-            cytemplate=self.cytemplate,
+            template=self.cytemplate,
             n_scales=self.n_scales,
             interpolation_matrix=self.interpolation_matrix,
             y=y,

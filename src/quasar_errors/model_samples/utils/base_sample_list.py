@@ -1,7 +1,7 @@
-from collections.abc import Iterator
-from typing import TypeVar
+from typing import Self, TypeVar
 
-from numpy import array, float64, zeros_like
+import numpy as np
+import pydantic
 from quasar_typing.numpy import FloatVector
 
 from .base_sample import BaseSample
@@ -9,44 +9,49 @@ from .base_sample import BaseSample
 S = TypeVar("S", bound=BaseSample)
 
 
-class BaseSampleList[S]:
-    def __iter__(self) -> Iterator[S]:
-        return iter(self.samples)
+class BaseSampleList[S](pydantic.BaseModel):
+    samples: list[S]
 
-    def __len__(self) -> int:
-        return len(self.samples)
+    @property
+    def parameters(self) -> FloatVector:
+        return np.concatenate([s.parameters for s in self.samples])
 
-    def __bool__(self) -> bool:
-        return len(self.samples) > 0
 
-    def __getitem__(self, index: int | slice) -> S | list[S]:
-        return self.samples[index]
+    @property
+    def names(self) -> list[str]:
+        return [s.name for s in self.samples]
+
+
+    def sort(self, reverse: bool = False, inplace: bool = False) -> Self:
+        if not inplace:
+            return self.model_copy().sort(reverse=reverse, inplace=True)
+        self.samples.sort(key=lambda s: s.sorting_key, reverse=reverse)
+        return self
+
 
     def __call__(
-        self, x: float | FloatVector, y: FloatVector | None = None
+        self, 
+        x: float | FloatVector, 
+        y: FloatVector | None = None
     ) -> float | FloatVector:
         if isinstance(x, (float, int)):
             assert y is None
-            return sum(sample(x) for sample in self)
+            return self(np.asarray(x), y=None)[0]
 
-        if y is None:
-            y = zeros_like(x, dtype=float64)
-
-        for sample in self:
-            sample(x, y=y)
+        for sample in self.samples:
+            y = sample(x, y=y)
         return y
 
+
     def prime(
-        self, x: float | FloatVector, y: FloatVector | None = None
+        self, 
+        x: float | FloatVector, 
+        y: FloatVector | None = None
     ) -> float | FloatVector:
         if isinstance(x, (float, int)):
             assert y is None
-            _x = array([x], dtype=float64)
-            return self.prime(_x)[0]
+            return self.prime(np.asarray(x), y=None)[0]
 
-        if y is None:
-            y = zeros_like(x, dtype=float64)
-
-        for sample in self:
-            sample.prime(x, y=y)
+        for sample in self.samples:
+            y = sample.prime(x, y=y)
         return y

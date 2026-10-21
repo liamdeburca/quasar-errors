@@ -1,40 +1,59 @@
 from collections.abc import Callable, Iterator
-from dataclasses import field
-from functools import cached_property
-from typing import Self
+from typing import Self, TypedDict
 
-from numpy import zeros_like
-from pydantic.dataclasses import dataclass
+import pydantic
+from quasar_models.modeling import SequentialModel
 from quasar_typing.numpy import FloatVector
-from quasar_utils.decorators import validate_call
 
 from ..model_samples import Sample
 
 
-@dataclass(frozen=True, repr=False)
-class ErrorResult:
-    samples: tuple[Sample, ...] = field(default_factory=tuple)
-    sample_weights: tuple[float, ...] = field(default_factory=tuple)
+class _SerializationDict(TypedDict):
+    n_samples: int
+    n_pix: int
+    x: FloatVector
+    dy: FloatVector
+    dx: FloatVector
+    ys: list[FloatVector]
+    weights: tuple[float, ...]
+    seq_model: SequentialModel | None
+    parameters: list[FloatVector | None]
 
-    @cached_property
+
+class ErrorResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(frozen=True)
+
+    seq_model: SequentialModel | None
+    samples: tuple[Sample, ...] = pydantic.Field(default_factory=tuple)
+    sample_weights: tuple[float, ...] = pydantic.Field(default_factory=tuple)
+
+    @property
     def n_samples(self) -> int:
         return len(self.samples)
 
-    @cached_property
+    @property
     def n_pix(self) -> int:
         return self.samples[0].x.size
 
-    @cached_property
+    ### Coordinates
+
+    @property
     def x(self) -> FloatVector:
         return self.samples[0].x
 
-    @cached_property
+    @property
     def y(self) -> FloatVector:
         return self.samples[0].y
 
-    @cached_property
+    @property
     def dy(self) -> FloatVector:
         return self.samples[0].dy
+
+    @property
+    def dx(self) -> FloatVector:
+        return self.samples[0].dx
+
+    ###
 
     def __repr__(self) -> str:
         _result = hex(id(self))
@@ -51,71 +70,95 @@ class ErrorResult:
     def __len__(self) -> int:
         return self.n_samples
 
-    @validate_call
+    @pydantic.validate_call
     def sample_filter(
         self,
-        target_line: str | set[str] | None = None,
+        *,
+        target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
         target_wave: float | set[float] | None = None,
+        target_line: str | set[str] | None = None,
     ) -> Callable[[Sample], Sample]:
         """
-        ** PYDANTIC VALIDATED METHOD **
-
-        Returns a function that filters samples based on the target line or
-        wave.
+        Returns a function that filters samples based on the target pattern, 
+        line, or wave.
         """
-        assert target_line or target_wave
-        assert not (target_line and target_wave)
+        from numpy import zeros_like as backup
 
-        backup = zeros_like
         base_sample = self.samples[0]
-        if target_wave is not None:
-            _, extra = base_sample.splitAtWave.__wrapped__(
-                base_sample,
-                target_wave,
-            )
-            if (extra is not None) and (extra.em is not None):
-                backup = extra.em
-
-            def sample_filter(sample: Sample) -> Sample:
-                nonlocal target_wave, backup
-                return sample.splitAtWave.__wrapped__(
-                    sample,
-                    target_wave,
-                    backup=backup,
-                )[0]
+        if target_pattern is not None:
+            method_name = "splitAtPattern"
+            arg = target_pattern
+        elif target_wave is not None:
+            method_name = "splitAtWave"
+            arg = target_wave
+        elif target_line is not None:
+            method_name = "splitAtLine"
+            arg = target_line
         else:
-            _, extra = base_sample.splitAtLine.__wrapped__(
-                base_sample,
-                target_line,
-            )
-            if (extra is not None) and (extra.em is not None):
-                backup = extra.em
+            raise ValueError("Must provide either pattern, wave, or line.")
 
-            def sample_filter(sample: Sample) -> Sample:
-                nonlocal target_line, backup
-                return sample.splitAtLine.__wrapped__(
-                    sample,
-                    target_line,
-                    backup=backup,
-                )[0]
+        extra = base_sample._split(method_name, arg)[1]
+        if (extra is not None) and (extra.em is not None):
+            backup = extra.em
+
+        def sample_filter(sample: Sample, _backup=backup) -> Sample:
+            return sample._split(method_name, arg, backup=_backup)[0]
 
         return sample_filter
 
-    @validate_call
+    @pydantic.validate_call
     def isolate(
         self,
-        target_line: str | set[str] | None = None,
+        *,
+        target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
         target_wave: float | set[float] | None = None,
+        target_line: str | set[str] | None = None,
     ) -> Self:
-        """
-        ** PYDANTIC VALIDATED METHOD **
-        """
-        sample_filter = self.sample_filter.__wrapped__(
-            self,
+        from quasar_models.modeling import PrepareModel
+
+        sample_filter = self.sample_filter(
+            target_pattern=target_pattern,
             target_line=target_line,
             target_wave=target_wave,
         )
-        return self.__class__(
-            samples=tuple(map(sample_filter, self.samples)),
+        samples = tuple(map(sample_filter, self.samples))
+
+        seq_model = None
+        if self.seq_model is not None:
+            chosen_submodels = sorted(
+                [
+                    self.seq_model._model[name].copy()
+                    for name in samples[0].names
+                ],
+                key=lambda m: m.sorting_key,
+            )
+            if chosen_submodels:
+                preparer = PrepareModel(
+                    x=self.x,
+                    model=sum(chosen_submodels[1:], start=chosen_submodels[0]),
+                    kernels=self.seq_model.kernels,
+                )
+                with preparer as (seq_model, _):
+                    pass
+            
+        return ErrorResult(
+            seq_model=seq_model,
+            samples=samples,
             sample_weights=self.sample_weights,
         )
+
+    def _serialization_helper(self) -> _SerializationDict:
+        """
+        Helper function for serializing the ErrorResult object.
+        """
+        return {
+            "n_samples": self.n_samples,
+            "n_pix": self.n_pix,
+            "x": self.x,
+            "dy": self.dy,
+            "dx": self.dx,
+            "ys": [s.y for s in self.samples],
+            "weights": self.sample_weights,
+            "seq_model": self.seq_model,
+            "parameters": [s.parameters for s in self.samples],
+        }

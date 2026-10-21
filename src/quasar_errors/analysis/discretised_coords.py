@@ -1,9 +1,9 @@
-from pydantic.dataclasses import dataclass
+from typing import TypedDict
+
 from quasar_typing.numpy import FloatMatrix, FloatVector
 
 
-@dataclass(frozen=True)
-class DiscretisedCoords:
+class DiscretisedCoords(TypedDict):
     x_bounds: FloatMatrix
     xs: FloatMatrix
     dxs: FloatVector

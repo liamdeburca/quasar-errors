@@ -1,22 +1,23 @@
 __all__ = [
     "get_average_absolute_deviation",
     "get_intercept",
+    "get_left_edge_at_height",
     "get_median_absolute_deviation",
     "get_peak",
     "get_quantile",
+    "get_right_edge_at_height",
     "get_width_at_height",
 ]
 
 from collections.abc import Callable, Iterable
 from typing import Literal
 
-from numpy import argwhere, array, dot, float64, invert
-from quasar_typing.misc import FWHMStrategy
+from numpy import argwhere, float64, fromiter
+from quasar_typing.literals import FWHMStrategy
 from quasar_typing.numpy import FloatVector
-from scipy.optimize import minimize_scalar, newton
-from scipy.stats._distn_infrastructure import rv_continuous_frozen
+from quasar_typing.scipy import RVContinuousFrozen
 
-from ..model_samples import GaussianSample, GaussianSampleList
+from quasar_errors.model_samples import GaussianSample, GaussianSampleList
 
 
 def get_intercept(
@@ -28,6 +29,7 @@ def get_intercept(
     *,
     fprime: Callable[[float], float] | None = None,
 ) -> float:
+    from scipy.optimize import newton
 
     y = func(x)
     below = y < y_crit
@@ -73,16 +75,37 @@ def get_intercept(
 
 
 def get_width_at_height(
-    model: Callable[[FloatVector], FloatVector]
-    | GaussianSample
-    | GaussianSampleList,
+    model: Callable[[FloatVector], FloatVector] | GaussianSample | GaussianSampleList,
+    x: FloatVector,
+    x_max: float,
+    y_crit: float,
+    strategy: FWHMStrategy,
+) -> float:
+    left_edge = get_left_edge_at_height(
+        model,
+        x,
+        x_max,
+        y_crit,
+        strategy,
+    )
+    right_edge = get_right_edge_at_height(
+        model,
+        x,
+        x_max,
+        y_crit,
+        strategy,
+    )
+    return right_edge - left_edge
+
+
+def get_left_edge_at_height(
+    model: Callable[[FloatVector], FloatVector] | GaussianSample | GaussianSampleList,
     x: FloatVector,
     x_max: float,
     y_crit: float,
     strategy: FWHMStrategy,
 ) -> float:
     is_left = x < x_max
-    is_right = invert(is_left)
 
     if isinstance(model, (GaussianSample, GaussianSampleList)):
         func = model.__call__
@@ -102,6 +125,25 @@ def get_width_at_height(
             fprime=fprime,
         )
 
+    return left_edge
+
+
+def get_right_edge_at_height(
+    model: Callable[[FloatVector], FloatVector] | GaussianSample | GaussianSampleList,
+    x: FloatVector,
+    x_max: float,
+    y_crit: float,
+    strategy: FWHMStrategy,
+) -> float:
+    is_right = x_max < x
+
+    if isinstance(model, (GaussianSample, GaussianSampleList)):
+        func = model.__call__
+        fprime = model.prime
+    else:
+        func = model
+        fprime = None
+
     right_edge = x[-1]
     if is_right.any():
         right_edge = get_intercept(
@@ -113,40 +155,28 @@ def get_width_at_height(
             fprime=fprime,
         )
 
-    return right_edge - left_edge
+    return right_edge
 
 
 def get_quantile(
     q: float | Iterable[float],
-    model: Callable[[FloatVector], FloatVector]
-    | GaussianSample
-    | GaussianSampleList,
+    model: Callable[[FloatVector], FloatVector] | GaussianSample | GaussianSampleList,
     x: FloatVector,
 ) -> float | FloatVector:
+    fprime = model.pdf \
+        if isinstance(model, (GaussianSample, GaussianSampleList)) \
+        else None
 
-    if isinstance(model, (GaussianSample, GaussianSampleList)):
-
-        def func(a):
-            nonlocal model, x
-            return get_intercept(
-                model.cdf, x, a, "left", "widest", fprime=model.pdf
-            )
-    else:
-
-        def func(a):
-            nonlocal model, x
-            return get_intercept(model, x, a, "left", "widest")
+    def func(a, _model=model, _x=x):
+        return get_intercept(_model, _x, a, "left", "widest", fprime=fprime)
 
     if isinstance(q, Iterable):
-        return array([func(a) for a in q], dtype=float64)
-    else:
-        return func(q)
+        return fromiter(map(func, q), dtype=float64)
+    return func(q)
 
 
 def get_peak(
-    model: Callable[[FloatVector], FloatVector]
-    | GaussianSample
-    | GaussianSampleList,
+    model: Callable[[FloatVector], FloatVector] | GaussianSample | GaussianSampleList,
     x: FloatVector,
 ) -> tuple[float, float]:
     """
@@ -159,6 +189,7 @@ def get_peak(
     y_max : float
         The maximum value of the model at x_max.
     """
+    from scipy.optimize import minimize_scalar
 
     y = model(x)
     idx = y.argmax()
@@ -167,10 +198,7 @@ def get_peak(
     elif idx == x.size - 1:
         return x[-1], y[-1]
 
-    def func(x):
-        return -model(x)
-
-    res = minimize_scalar(func, bounds=(x[idx - 1], x[idx + 1]))
+    res = minimize_scalar(lambda x: -model(x), bounds=(x[idx - 1], x[idx + 1]))
     x_max: float = res.x
     y_max: float = -res.fun
 
@@ -179,37 +207,27 @@ def get_peak(
 
 def get_median_absolute_deviation(
     cen: float,
-    model: Callable[[FloatVector], FloatVector]
-    | GaussianSample
-    | GaussianSampleList,
+    model: Callable[[FloatVector], FloatVector] | GaussianSample | GaussianSampleList,
     x: FloatVector,
 ) -> float:
     if isinstance(model, (GaussianSample, GaussianSampleList)):
-
-        def func(x):
-            nonlocal model
-            return model.cdf(x + cen) - model.cdf(cen - x)
-
-        def fprime(x):
-            nonlocal model
-            return model.pdf(x + cen) + model.pdf(cen - x)
+        def func(x, _model=model):
+            return _model.cdf(x + cen) - _model.cdf(cen - x)
+        def fprime(x, _model=model):
+            return _model.pdf(x + cen) + _model.pdf(cen - x)
     else:
-
-        def func(x):
-            nonlocal model
-            return model(x + cen) - model(cen - x)
-
+        def func(x, _model=model):
+            return _model(x + cen) - _model(cen - x)
         fprime = None
 
     return get_intercept(func, x, 0.5, "left", "widest", fprime=fprime)
 
-
 def get_average_absolute_deviation(
     cen: float,
-    dists: rv_continuous_frozen | Iterable[rv_continuous_frozen],
+    dists: RVContinuousFrozen | Iterable[RVContinuousFrozen],
     weights: FloatVector,
 ) -> float:
-    if isinstance(dists, rv_continuous_frozen):
+    if isinstance(dists, Iterable):
         mean, std = dists.args[:2]
         f0 = dists.pdf(cen)
         F0 = dists.cdf(cen)
@@ -219,8 +237,7 @@ def get_average_absolute_deviation(
     if W == 0:
         return 0.0
 
-    aad_per_profile = [
-        get_average_absolute_deviation(cen, dist, (1.0,)) for dist in dists
-    ]
-
-    return dot(weights, aad_per_profile) / W
+    return sum(
+        w * get_average_absolute_deviation(cen, d, (1.0,))
+        for w, d in zip(weights, dists)
+    ) / W

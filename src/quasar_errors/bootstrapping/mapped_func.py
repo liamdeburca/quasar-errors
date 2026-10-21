@@ -1,111 +1,138 @@
 from dataclasses import field
-from typing import Self
+from typing import Optional, Self
 
-from pydantic.dataclasses import dataclass
-from quasar_models.modeling import Fitter, PrepareModel
-from quasar_typing.astropy import Model_
-from quasar_typing.numpy import FittableFloatVector
+import numpy as np
+import pydantic
+from quasar_models.modeling import Fitter, PrepareModel, SequentialModel
+from quasar_typing.astropy import ModelType
+from quasar_typing.numpy import (
+    BoolVector,
+    FittableFloatVector,
+    FloatMatrix,
+    FloatVector,
+)
 from quasar_utils.setup import FitterKwargs
 
 from quasar_errors.model_samples import Sample
 
 
-@dataclass
+@pydantic.dataclasses.dataclass
 class MappedFunc:
     x: FittableFloatVector
-    dy: FittableFloatVector
-    y_bg: FittableFloatVector
+    dy: FloatVector
+    dx: FloatVector
+    y_bg: FloatVector
 
     variant: str = field(default="spectrum", kw_only=True)
-    model: Model_ | None = field(default=None, kw_only=True)
+    model: Optional[ModelType] = field(default=None, kw_only=True)
+    is_logbinned: bool | None = field(default=None, kw_only=True)
+    
+    eval_mask: BoolVector | None = field(default=None, kw_only=True)
+    comp_mask: BoolVector | None = field(default=None, kw_only=True)
+    kernels: FloatMatrix | None = field(default=None, kw_only=True)
+
     fitter_kwargs: FitterKwargs | None = field(default=None, kw_only=True)
 
-    model_is_prepared: bool = field(default=False, kw_only=True)
-    weights: FittableFloatVector | None = field(default=None, kw_only=True)
-    fitter: Fitter | None = field(default=None, kw_only=True)
+    _preparer: PrepareModel | None = field(default=None, kw_only=True)
+    _seq_model: SequentialModel | None = field(default=None, kw_only=True)
+    _where: BoolVector | None = field(default=None, kw_only=True)
+    _model_is_prepared: bool = field(default=False, kw_only=True)
+    _weights: FittableFloatVector | None = field(default=None, kw_only=True)
+    _fitter: Fitter | None = field(default=None, kw_only=True)
 
     def __post_init__(self):
-        if not self.x.size == self.dy.size == self.y_bg.size:
-            msg = f"x ({self.x.size}), dy ({self.dy.size}), and y_bg ({self.y_bg.size}) must have the same size"
+        if self.x.ndim != 1:
+            msg = f"`x` must be a 1-dimensional array, but got shape {self.x.shape}"
+            raise ValueError(msg)
+        
+        if self.x.shape != self.dy.shape:
+            msg = f"Shape mismatch between `x` ({self.x.shape}) and `dy` ({self.dy.shape})"
+            raise ValueError(msg)
+        if self.x.shape != self.dx.shape:
+            msg = f"Shape mismatch between `x` ({self.x.shape}) and `dx` ({self.dx.shape})"
+            raise ValueError(msg)
+        if self.x.shape != self.y_bg.shape:
+            msg = f"Shape mismatch between `x` ({self.x.shape}) and `y_bg` ({self.y_bg.shape})"
+            raise ValueError(msg)
+    
+        if self.variant != "spectrum" and self.model is None:
+            msg = f"'model' must be provided for variant '{self.variant}'"
             raise ValueError(msg)
 
-        if self.variant != "spectrum":
-            if self.model is None:
-                msg = f"'model' must be provided for variant '{self.variant}'"
-                raise ValueError(msg)
-
-            if self.fitter is None:
-                msg = f"'fitter' must be provided for variant '{self.variant}'"
-                raise ValueError(msg)
+        if self.eval_mask is None:
+            self.eval_mask = np.ones(self.x.size, np.bool_)
+        elif self.eval_mask.shape != self.x.shape:
+            msg = f"Shape mismatch between `eval_mask` ({self.eval_mask.shape}) and `x` ({self.x.shape})"
+            raise ValueError(msg)
+        
+        if self.comp_mask is None:
+            self.comp_mask = np.ones(self.x.size, np.bool_)
+        elif self.comp_mask.shape != self.x.shape:
+            msg = f"Shape mismatch between `comp_mask` ({self.comp_mask.shape}) and `x` ({self.x.shape})"
+            raise ValueError(msg)
+        
+        if self.kernels is None:
+            self.kernels = np.ones((self.x.size, 1), np.float64)
+        elif self.kernels.shape[0] != self.x.size:
+            msg = f"Dimension 0 mismatch between `kernels` ({self.kernels.shape}) and `x` ({self.x.shape})"
+            raise ValueError(msg)
 
     def __enter__(self) -> Self:
         if self.variant != "spectrum":
-            PrepareModel.prepare_model(self.x, self.model)
-        self.model_is_prepared = True
-        self.weights = 1.0 / self.dy
-        self.fitter = Fitter()
+            self._preparer = PrepareModel(
+                x=self.x,
+                model=self.model,
+                eval_mask=self.eval_mask,
+                comp_mask=self.comp_mask,
+                kernels=self.kernels,
+                is_logbinned=self.is_logbinned,
+            )
+            self._seq_model, self._where = self._preparer.__enter__()
+
+        self._model_is_prepared = True
+        self._weights = 1.0 / self.dy
+        self._fitter = Fitter()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         if self.variant != "spectrum":
-            PrepareModel.unprepare_model(self.model)
-        self.model_is_prepared = False
-        self.weights = None
-        self.fitter = None
+            self._preparer.__exit__(None, None, None)
+            self._seq_model = None
+            self._where = None
 
-    def __call__(
-        self,
-        y: FittableFloatVector,
-    ) -> Sample:
-        if not self.model_is_prepared:
+        self._model_is_prepared = False
+        self._weights = None
+        self._fitter = None
+
+    def __call__(self, y: FittableFloatVector) -> Sample:
+        if not self._model_is_prepared:
             msg = "Instances of 'MappedFunc' must be used as context managers."
             raise RuntimeError(msg)
 
+        mask = self.comp_mask & self.eval_mask
         _y = y - self.y_bg
+        args = (self.x[mask], _y[mask], self.dy[mask], self.dx[mask])
+        
         if self.variant == "spectrum":
-            return Sample.fromSpectrumSample(
-                self.x,
-                _y,
-                self.dy,
+            return Sample.fromSpectrumSample.__wrapped__(
+                Sample,
+                *args,
                 weight=1.0,
             )
-
-        self.fitter(
-            self.model,
-            self.x,
+        
+        self._fitter(
+            self._seq_model, 
+            self.x, 
             _y,
-            weights=self.weights,
-            **self.fitter_kwargs,
+            weights=self._weights,
+            where=self._where,
+            **(self.fitter_kwargs or {}),
         )
-        return Sample.fromParamVector(
-            self.x,
-            _y,
-            self.dy,
-            self.fitter.sol,
-            self.model,
+        return Sample.fromParamVector.__wrapped__(
+            Sample,
+            *args,
+            self._fitter.sol, 
+            self._seq_model,
             weight=1.0,
         )
-
-    def __getstate__(self) -> dict:
-        return {
-            "x": self.x,
-            "dy": self.dy,
-            "y_bg": self.y_bg,
-            "variant": self.variant,
-            "model": self.model,
-            "fitter_kwargs": self.fitter_kwargs,
-            "model_is_prepared": self.model_is_prepared,
-            "weights": self.weights,
-            "fitter": self.fitter,
-        }
-
-    def __setstate__(self, state: dict) -> None:
-        self.x = state["x"]
-        self.dy = state["dy"]
-        self.y_bg = state["y_bg"]
-        self.variant = state["variant"]
-        self.model = state["model"]
-        self.fitter_kwargs = state["fitter_kwargs"]
-        self.model_is_prepared = state["model_is_prepared"]
-        self.weights = state["weights"]
-        self.fitter = state["fitter"]
+    

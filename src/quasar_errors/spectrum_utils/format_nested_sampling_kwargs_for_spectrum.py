@@ -3,17 +3,20 @@ __all__ = ["format_nested_sampling_kwargs_for_spectrum"]
 from logging import getLogger
 from typing import Any, Literal, Protocol
 
-from quasar_typing.logging import Logger_
-from quasar_typing.misc import (
+from quasar_typing.literals import Variant
+from quasar_typing.logging import LoggerType
+from quasar_typing.multiprocessing import PoolType
+from quasar_typing.numpy import FloatVector, RandomStateType
+from quasar_typing.string_selections import (
     DataTypes,
     ModelTypes,
-    Pool_,
-    Variant,
 )
-from quasar_typing.numpy import FloatVector, RandomState_
 from quasar_utils.setup import Info
 
-from ..nested_sampling import BaseNestedSampler, UniformNestedSampler
+from quasar_errors.nested_sampling import (
+    BaseNestedSampler,
+    UniformNestedSampler,
+)
 
 logger = getLogger(__name__)
 
@@ -35,14 +38,13 @@ def format_nested_sampling_kwargs_for_spectrum(
     data_types: DataTypes | None = None,
     model_types: ModelTypes | None = None,
     nested_type: Literal["uniform"] = "uniform",
-    pool: Pool_ | None = None,
+    pool: PoolType | None = None,
     iterations: int = 100,
-    random_state: RandomState_ = None,
-    renew_rng: bool = False,
+    random_state: RandomStateType = None,
     replace_missing: bool = True,
     tqdm_disable: bool = False,
     tqdm_leave: bool = False,
-    logger: Logger_ = logger,
+    logger: LoggerType = logger,
 ) -> tuple[BaseNestedSampler, tuple[Any, ...], dict[str, Any]]:
     if data_types is None:
         data_types = DataTypes({"all"})
@@ -60,7 +62,6 @@ def format_nested_sampling_kwargs_for_spectrum(
         "pool": pool,
         "iterations": iterations,
         "random_state": random_state,
-        "renew_rng": renew_rng,
         "replace_missing": replace_missing,
         "tqdm_disable": tqdm_disable,
         "tqdm_leave": tqdm_leave,

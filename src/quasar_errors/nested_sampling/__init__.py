@@ -1,10 +1,16 @@
-__all__ = ['UniformNestedSampler']
+__all__ = [
+    "BaseNestedSampler",
+    "UniformNestedSampler",
+]
 
 from typing import ClassVar, Literal
-from pydantic.dataclasses import dataclass
+
+import pydantic
+
 from .base_nested_sampler import BaseNestedSampler
 
-@dataclass
+
+@pydantic.dataclasses.dataclass
 class UniformNestedSampler(BaseNestedSampler):
-    prior: ClassVar[Literal['uniform']] = 'uniform'
-    loss: ClassVar[Literal['chi2']] = 'chi2'
+    prior: ClassVar[Literal["uniform"]] = "uniform"
+    loss: ClassVar[Literal["chi2"]] = "chi2"

@@ -1,16 +1,12 @@
 from logging import getLogger
 from typing import Any
 
-from quasar_typing.logging import Logger_
-from quasar_typing.misc import (
-    BootstrapType,
-    DataTypes,
-    ModelTypes,
-    Pool_,
-    Variant,
-    VaryLines,
-)
-from quasar_typing.numpy import RandomState_
+from numpy import ndarray
+from quasar_typing.literals import BootstrapType, Variant
+from quasar_typing.logging import LoggerType
+from quasar_typing.multiprocessing import PoolType
+from quasar_typing.numpy import RandomStateType
+from quasar_typing.string_selections import DataTypes, ModelTypes, VaryLines
 from quasar_utils.setup import FitterKwargs
 
 from quasar_errors.bootstrapping import (
@@ -25,7 +21,27 @@ logger = getLogger(__name__)
 
 
 def format_bootstrapping_kwargs_for_spectrum(
-    spectrum,
+    masked_coords_obj: object,
+) -> tuple[BaseBootstrapper, tuple[Any, ...], dict[str, Any]]:
+
+    x = masked_coords_obj._x.copy()
+    y = masked_coords_obj._y.copy()
+    dy = masked_coords_obj._dy.copy()
+    args = (x, y, dy)
+
+    kernels = masked_coords_obj._kernels
+    eval_mask = masked_coords_obj.primary_mask
+    comp_mask = masked_coords_obj.secondary_mask
+    is_logbinned = masked_coords_obj.is_logbinned
+
+
+
+
+    return BaseBootstrapper(x=x, y=y, dy=dy), (), {}
+
+
+def format_bootstrapping_kwargs_for_spectrum(
+    spectrum: object,
     fitter_kwargs: FitterKwargs,
     *,
     covered: bool = False,
@@ -37,14 +53,13 @@ def format_bootstrapping_kwargs_for_spectrum(
     bootstrap_type: BootstrapType = "model",
     n_sigmas: float = 2.0,
     vary_lines: VaryLines | None = None,
-    pool: Pool_ | None = None,
+    pool: PoolType | None = None,
     iterations: int = 100,
-    random_state: RandomState_ = None,
-    renew_rng: bool = False,
+    random_state: RandomStateType | None = None,
     replace_missing: bool = True,
     tqdm_disable: bool = False,
     tqdm_leave: bool = False,
-    logger: Logger_ = logger,
+    logger: LoggerType = logger,
 ) -> tuple[BaseBootstrapper, tuple[Any, ...], dict[str, Any]]:
     """
     Convenience function that formats the arguments for creating a bootstrapper
@@ -63,9 +78,11 @@ def format_bootstrapping_kwargs_for_spectrum(
     variant : {'spectrum', 'standard', 'flexible', 'rigid'}
         The bootstrapping variant to use.
     data_types : set[{'pl', 'fe', 'ba', 'hg', 'em'}] | None
-        The windows whose data to include in the bootstrapping data.
+        The windows whose data to include in the bootstrapping data. If None, 
+        the entire spectrum is included.
     model_types : set[{'pl', 'fe', 'ba', 'hg', 'em'}] | None
-        The windows whose models to include in the bootstrapping data.
+        The windows whose models to include in the bootstrapping data. If None,
+        all model types are included.
     bootstrap_type : {'spectrum', 'model', 'frequentist'}
         The type of bootstrapping to perform, i.e. how to create resampled data.
     n_sigmas : float
@@ -80,9 +97,6 @@ def format_bootstrapping_kwargs_for_spectrum(
         The number of bootstrap iterations to perform.
     random_state : numpy.random.Generator | numpy.random.RandomState | int | None
         The random state to use for reproducibility.
-    renew_rng : bool
-        Whether to renew the random number generator at the start of the
-        bootstrapping process.
     replace_missing : bool
         Whether to replace missing/rejected pixels.
     tqdm_disable : bool
@@ -94,8 +108,6 @@ def format_bootstrapping_kwargs_for_spectrum(
     logger : logging.Logger
         The logger this functions uses to log messages.
     """
-    if data_types is None:
-        data_types = DataTypes({"all"})
     if model_types is None:
         model_types = ModelTypes({"all"})
 
@@ -113,7 +125,6 @@ def format_bootstrapping_kwargs_for_spectrum(
         "fitter_kwargs": fitter_kwargs,
         "iterations": iterations,
         "random_state": random_state,
-        "renew_rng": renew_rng,
         "bootstrap_type": bootstrap_type,
         "n_sigmas": n_sigmas,
         "replace_missing": replace_missing,
@@ -160,22 +171,33 @@ def format_bootstrapping_kwargs_for_spectrum(
             raise ValueError(msg)
 
     for m_type in model_types:
-        if (windows := spectrum[m_type]) is not None and (
-            model := windows.getModel()
-        ) is not None:
+        if (windows := spectrum[m_type]) is not None \
+            and (model := windows.getModel()) is not None:
             kwargs[m_type] = model
 
     ### Data types // Windows ###
-    for d_type in filter(
-        lambda d_type: d_type not in model_types,
-        data_types,
-    ):
-        logger.warning(
-            f"Required model type '{d_type}' is not included in "
-            "'data_types'! This may lead to inaccurate error estimation. "
-        )
+    if data_types is not None:
+        for m_type in model_types:
+            if m_type in data_types:
+                continue
 
-    args = (spectrum._x, spectrum._y, spectrum._dy)
+            logger.warning(
+                f"Required model type '{m_type}' is not included in "
+                "'data_types'! This may lead to inaccurate error estimation. "
+            )
+
+    def _func(arr: ndarray) -> ndarray:
+        arr = arr.copy("C")
+        arr.setflags(write=True)
+        return arr
+
+    # Make coordinates 
+    x = spectrum._x
+    y = spectrum._y
+    dy = spectrum._dy
+    assert x.shape == y.shape == dy.shape
+    args = (_func(x), _func(y), _func(dy))        
+
     kwargs["usable_pixels"] = spectrum.getMask.__wrapped__(
         spectrum,
         data_types=data_types,

@@ -1,5 +1,5 @@
 from pydantic.dataclasses import dataclass
-from quasar_typing.misc import FWHMStrategy
+from quasar_typing.literals import FWHMStrategy
 
 
 @dataclass(frozen=True)

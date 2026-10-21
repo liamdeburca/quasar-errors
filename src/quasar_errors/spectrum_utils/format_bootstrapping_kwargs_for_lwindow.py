@@ -1,21 +1,25 @@
 from logging import getLogger
-from typing import Any
+from typing import Any, Optional, Union
 
-from quasar_models import BalmerModel, IronModel, PowerLawModel
-from quasar_typing.astropy import CompoundModel_
-from quasar_typing.logging import Logger_
-from quasar_typing.misc import (
-    BootstrapType,
+from quasar_models import (
+    BalmerModel,
+    HostGalaxyModel,
+    IronModel,
+    PowerLawModel,
+)
+from quasar_typing.astropy import CompoundModelType
+from quasar_typing.literals import BootstrapType, Variant
+from quasar_typing.logging import LoggerType
+from quasar_typing.multiprocessing import PoolType
+from quasar_typing.numpy import RandomStateType
+from quasar_typing.string_selections import (
     ModelTypes,
-    Pool_,
-    Variant,
     VaryLines,
 )
-from quasar_typing.numpy import RandomState_
 from quasar_utils.continuum_fit_result import ContinuumFitResult
 from quasar_utils.setup import FitterKwargs
 
-from ..bootstrapping import (
+from quasar_errors.bootstrapping import (
     BaseBootstrapper,
     FlexibleBootstrapper,
     RigidBootstrapper,
@@ -30,10 +34,10 @@ def format_bootstrapping_kwargs_for_lwindow(
     lwindow,
     fitter_kwargs: FitterKwargs,
     *,
-    pl: PowerLawModel | None = None,
-    fe: IronModel | CompoundModel_[IronModel] | None = None,
-    ba: BalmerModel | None = None,
-    hg: None = None,
+    pl: Optional[PowerLawModel] = None,
+    fe: Union[IronModel, CompoundModelType[IronModel]] | None = None,
+    ba: Optional[BalmerModel] = None,
+    hg: Optional[HostGalaxyModel] = None,
     without_rejections: bool = False,
     without_absorption: bool = False,
     with_neighbours: bool = True,
@@ -42,16 +46,15 @@ def format_bootstrapping_kwargs_for_lwindow(
     bootstrap_type: BootstrapType = "model",
     n_sigmas: float = 2.0,
     vary_lines: VaryLines | None = None,
-    pool: Pool_ | None = None,
+    pool: PoolType | None = None,
     cfit: ContinuumFitResult | None = None,
     iterations: int = 100,
-    random_state: RandomState_ = None,
-    renew_rng: bool = False,
+    random_state: RandomStateType = None,
     replace_missing: bool = True,
     tqdm_disable: bool = False,
     tqdm_leave: bool = False,
-    logger: Logger_ = logger,
-) -> tuple[BaseBootstrapper, tuple[Any], dict[str, Any]]:
+    logger: LoggerType = logger,
+) -> tuple[BaseBootstrapper, tuple[Any, ...], dict[str, Any]]:
     """
     Convenience function that formats the arguments for creating a bootstrapper
     instance.
@@ -60,7 +63,7 @@ def format_bootstrapping_kwargs_for_lwindow(
     ----------
     lwindow : quasar_decrypt.LWindow
         The line window to be bootstrapped.
-    fitter : astropy.modeling.fitting.Fitter
+    fitter_kwargs : FitterKwargs
         The fitter to use for refitting models during bootstrapping.
     pl : PowerLawModel, optional
         The power law model. Retrieved from the parent Spectrum if not given
@@ -101,9 +104,6 @@ def format_bootstrapping_kwargs_for_lwindow(
         The number of bootstrap iterations to perform.
     random_state : numpy.random.Generator | numpy.random.RandomState | int | None
         The random state to use for reproducibility.
-    renew_rng : bool
-        Whether to renew the random number generator at the start of the
-        bootstrapping process.
     replace_missing : bool
         Whether to replace missing/rejected pixels.
     tqdm_disable : bool
@@ -128,7 +128,6 @@ def format_bootstrapping_kwargs_for_lwindow(
         "fitter_kwargs": fitter_kwargs,
         "iterations": iterations,
         "random_state": random_state,
-        "renew_rng": renew_rng,
         "bootstrap_type": bootstrap_type,
         "n_sigmas": n_sigmas,
         "replace_missing": replace_missing,
@@ -232,15 +231,6 @@ def format_bootstrapping_kwargs_for_lwindow(
             logger.critical(msg)
             raise ValueError(msg)
 
-        try:
-            cfit = cont_windows.summariseContinuumFitResult()
-        except Exception as e:
-            msg = (
-                f"Missing 'cfit': Failed to get 'cfit' from 'pl' windows: {e}"
-            )
-            logger.critical(msg)
-            raise ValueError(msg)
-
-        kwargs["cfit"] = cfit
+        kwargs["cfit"] = cont_windows.summariseContinuumFitResult()
 
     return bootstrapper_cls, args, kwargs

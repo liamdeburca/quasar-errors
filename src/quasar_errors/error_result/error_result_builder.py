@@ -1,20 +1,18 @@
 from collections.abc import Iterable, Iterator
-from dataclasses import field
 from typing import Self
 
-from pydantic.dataclasses import dataclass
-from quasar_typing.astropy import Model_
+import pydantic
+from quasar_models.modeling import SequentialModel
 from quasar_typing.numpy import CoordsTuple, FloatVector
-from quasar_utils.decorators import validate_call
 
 from ..model_samples import Sample
 from .error_result import ErrorResult
 
 
-@dataclass
-class ErrorResultBuilder:
-    samples: list[Sample] = field(default_factory=list)
-    sample_weights: list[float] = field(default_factory=list)
+class ErrorResultBuilder(pydantic.BaseModel):
+    seq_model: SequentialModel | None
+    samples: list[Sample] = pydantic.Field(default_factory=list)
+    sample_weights: list[float] = pydantic.Field(default_factory=list)
 
     def __getitem__(self, index: int | slice) -> Sample | list[Sample]:
         return self.samples[index]
@@ -46,36 +44,32 @@ class ErrorResultBuilder:
     def initialise(
         cls,
         coords: CoordsTuple,
-        model: Model_,
+        seq_model: SequentialModel,
     ) -> Self:
         sample = Sample.fromModelSample(
             *coords,
-            model=model,
+            model=seq_model,
             weight=1.0,
         )
         return ErrorResultBuilder(
+            seq_model=seq_model,
             samples=[sample],
             sample_weights=[1.0],
         )
 
-    @validate_call
+    @pydantic.validate_call
     def simple_append(self, sample: Sample) -> None:
-        """
-        ** PYDANTIC VALIDATED METHOD **
-        """
         self.samples.append(sample)
         self.sample_weights.append(1.0)
 
-    @validate_call
+    @pydantic.validate_call
     def simple_extend(self, samples: Iterable[Sample]) -> None:
-        """
-        ** PYDANTIC VALIDATED METHOD **
-        """
         for sample in samples:
             self.simple_append.__wrapped__(self, sample)
 
     def finalise(self) -> ErrorResult:
         return ErrorResult(
+            seq_model=self.seq_model,
             samples=tuple(self.samples),
             sample_weights=tuple(self.sample_weights),
         )
