@@ -161,10 +161,10 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
 
         func: Callable[[str], bool]
         if isinstance(pattern, str):
-            func = lambda c: re.fullmatch(pattern, c) is not None
+            func = lambda c: re.match(pattern, c) is not None
         elif isinstance(pattern, tuple):
             func = lambda c: any(
-                re.fullmatch(p, c) is not None
+                re.match(p, c) is not None
                 for p in pattern
             )
         else:

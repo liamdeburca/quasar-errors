@@ -10,6 +10,7 @@ from astropy.constants import c
 from quasar_models import EmModel, GaussianModel
 from quasar_models._core.modeling.gaussian import (
     GaussianEvaluateV,
+    GaussianEvaluateX,
     choose_evaluate_func,
     choose_prime_func,
     evaluate_v,
@@ -50,8 +51,8 @@ class GaussianSample(BaseSample):
     sigma_res: float | None
 
     kwargs: dict[str, Any] = field(default_factory=dict)
-    evaluate_func: GaussianEvaluateV = evaluate_v
-    prime_func: GaussianEvaluateV = prime_v
+    evaluate_func: GaussianEvaluateV | GaussianEvaluateX = evaluate_v
+    prime_func: GaussianEvaluateV | GaussianEvaluateX = prime_v
 
     model_type: ClassVar[Literal["em"]] = "em"
 

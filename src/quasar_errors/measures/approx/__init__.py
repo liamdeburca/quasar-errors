@@ -9,14 +9,24 @@ __all__ = [
 import math
 from collections.abc import Iterable
 
-from numpy import append, array, dot, empty, float64, interp, searchsorted
+from numpy import (
+    append,
+    array,
+    cumsum,
+    dot,
+    float64,
+    interp,
+    nan_to_num,
+    searchsorted,
+)
 from quasar_typing.literals import FWHMStrategy
 from quasar_typing.numpy import FloatVector
 
 from ..utils import mirror_and_rebin
 from .approx import get_intercept as cy_get_intercept
 from .approx import get_peak as cy_get_peak
-from .approx import get_quantile as cy_get_quantile
+
+# from .approx import get_quantile as cy_get_quantile
 from .approx import u_xinterp as cy_u_xinterp
 from .approx import u_yinterp as cy_u_yinterp
 
@@ -67,7 +77,8 @@ def get_left_edge_at_height(
     y_crit: float,
     strategy: FWHMStrategy,
 ) -> tuple[float, float]:
-    assert x.size == y.size == dy.size
+    assert x.size == y.size
+    assert x.size == dy.size
     mode_idx = searchsorted(x, x_max, side="left")
 
     val = x[0]
@@ -142,10 +153,11 @@ def get_quantile(
         assert x.size == y.size == dx.size
         edges = append(x - dx / 2, x[-1] + dx[-1] / 2)
 
-    cdf = empty(x.size + 1, dtype=float64)
-    out = empty(qs.size, dtype=float64)
-    _ = cy_get_quantile(qs, x, y, edges, cdf, out)
+    cdf = append(0, cumsum(nan_to_num(y)))
+    if cdf[-1] > 0:
+        cdf /= cdf[-1]
 
+    out = interp(qs, cdf, edges)
     return out[0] if isinstance(q, float) else out
 
 

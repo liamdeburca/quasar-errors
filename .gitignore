@@ -1,5 +1,9 @@
 .notes
-build/
+.pytest_cache
+.ruff_cache
+.vscode
+build
 __pycache__
 .DS_Store
+
 *.c

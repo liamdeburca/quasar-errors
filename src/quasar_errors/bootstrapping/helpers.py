@@ -11,6 +11,73 @@ from quasar_typing.numpy import (
     FloatMatrix,
     FloatVector,
 )
+from quasar_utils.resolving import mask_kernels
+
+
+def _replace_missing_helper(
+    x: FittableFloatVector,
+    y: FloatVector,
+    dy: FloatVector,
+    full_model: Optional[ModelType],
+    kernels: FloatMatrix | None,
+    is_logbinned: bool | None,
+    bootstrap_type: str,   
+) -> tuple[BoolVector, list[str]]:
+    msgs: list[str] = []
+
+    y_valid_mask = isfinite(y)
+    dy_valid_mask = isfinite(dy) & (dy > 0)
+    is_valid = y_valid_mask & dy_valid_mask
+
+    n_pix: int = x.size
+    n_y_valid: int = y_valid_mask.sum()
+    n_dy_valid: int = dy_valid_mask.sum()
+    n_valid: int = is_valid.sum()
+    msgs.append(
+        f"{n_valid}/{n_pix} (thereof: {n_y_valid} ('y'), {n_dy_valid} ('dy'))"
+    )
+
+    if is_valid.all():
+        msgs.append("All pixels are valid -> returning early!")
+        return is_valid, msgs
+    elif full_model is None:
+        msgs.append("No full model provided -> cannot replace missing values.")
+        return is_valid, msgs
+    elif bootstrap_type == "frequentist":
+        msgs.append("Performing frequentist bootstrap -> skipping replacement")
+        return is_valid, msgs
+
+
+    if y_valid_mask.all():
+        msgs.append("All `y` values are valid!")
+    else:
+        msgs.append("Replacing missing `y` values with model predictions.")
+        preparer = PrepareModel(
+            x=x[y_valid_mask],
+            model=full_model,
+            kernels=mask_kernels(kernels, y_valid_mask),
+            is_logbinned=is_logbinned,
+        )
+        with preparer as (seq_model, _):
+            y[~y_valid_mask] = seq_model(x)
+
+
+    if dy_valid_mask.all():
+        msgs.append("All `dy` values are valid!")
+    elif not dy_valid_mask.any():
+        msgs.append("No valid `dy` values available! Replacing with: 1.0.")
+        dy[:] = 1.0
+    else:
+        dy[~dy_valid_mask] = med = median(dy[dy_valid_mask])
+        msgs.append(
+            f"Replacing {(~dy_valid_mask).sum()} missing `dy` values. "
+            f"Replacing with median: {med}"
+        )
+
+    is_valid = isfinite(y) & isfinite(dy) & (dy > 0)
+    assert is_valid.all()
+
+    return is_valid, msgs
 
 
 def replace_missing_helper(
@@ -60,60 +127,16 @@ def replace_missing_helper(
     list[str]
         A list of messages describing the replacement process.
     """
-    msgs: list[str] = []
-
     mask = eval_mask & comp_mask
-    _mask = comp_mask[eval_mask]
-    n_pix: int = _mask.size # no. of pixels used for evaluation
-    n_valid: int = _mask.sum() # no. of valid pixels used for evaluation
-    msgs.append(f"{n_pix=}, thereof {n_valid=}")
-
-    if _mask.all():
-        # All pixels are valid
-        msgs.append("All pixels are valid -> returning early!")
-        return msgs
-
-    if bootstrap_type == "frequentist":
-        msgs.append("Performing frequentist bootstrap -> skipping replacement")
-        return msgs
-
-    ###
-
-    valid_y = mask & isfinite(y)
-    invalid_y = mask & ~isfinite(y)
-    if valid_y[comp_mask].all():
-        msgs.append("No missing `y` values!")
-    elif full_model is None:
-        msgs.append("No full model provided -> cannot replace missing `y` values.")
-    else:
-        msgs.append(f"Replacing {invalid_y[mask].sum()} missing `y` values.")
-        preparer = PrepareModel(
-            x=x,
-            model=full_model,
-            eval_mask=eval_mask,
-            comp_mask=comp_mask,
-            kernels=kernels,
-            is_logbinned=is_logbinned,
-        )
-        with preparer as (seq_model, _):
-            f = seq_model(x[eval_mask]) # Only evaluate on `eval_mask`
-            m = invalid_y[eval_mask]
-            y[eval_mask][m] = f[m]
-
-    ###
-
-    valid_dy = mask & (isfinite(dy) & (dy > 0))
-    invalid_dy = mask & ~(isfinite(dy) & (dy > 0))
-    if valid_dy[comp_mask].all():
-        msgs.append("No missing `dy` values!")
-    else:
-        msgs.append(f"Replacing {invalid_dy[mask].sum()} missing `dy` values(s).")
-        med = median(dy[eval_mask][valid_dy[eval_mask]])
-        msgs.append(f"Median of valid `dy` values: {med}")
-        dy[eval_mask][invalid_dy[eval_mask]] = med
-
+    is_valid, msgs = _replace_missing_helper(
+        x[mask], y[mask], dy[mask],
+        full_model=full_model,
+        kernels=mask_kernels(kernels, mask),
+        is_logbinned=is_logbinned,
+        bootstrap_type=bootstrap_type,
+    )
     msgs.append("Replacement complete: updating `comp` mask!")
-    comp_mask[eval_mask] = True
+    comp_mask[mask] = is_valid
 
     return msgs
 

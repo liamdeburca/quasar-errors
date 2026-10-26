@@ -128,8 +128,7 @@ class MappedFunc:
             where=self._where,
             **(self.fitter_kwargs or {}),
         )
-        return Sample.fromParamVector.__wrapped__(
-            Sample,
+        return Sample.fromParamVector(
             *args,
             self._fitter.sol, 
             self._seq_model,

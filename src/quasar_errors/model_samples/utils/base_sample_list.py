@@ -36,7 +36,7 @@ class BaseSampleList[S](pydantic.BaseModel):
     ) -> float | FloatVector:
         if isinstance(x, (float, int)):
             assert y is None
-            return self(np.asarray(x), y=None)[0]
+            return self(np.array([x]), y=None)[0]
 
         for sample in self.samples:
             y = sample(x, y=y)
@@ -50,7 +50,7 @@ class BaseSampleList[S](pydantic.BaseModel):
     ) -> float | FloatVector:
         if isinstance(x, (float, int)):
             assert y is None
-            return self.prime(np.asarray(x), y=None)[0]
+            return self.prime(np.array([x]), y=None)[0]
 
         for sample in self.samples:
             y = sample.prime(x, y=y)

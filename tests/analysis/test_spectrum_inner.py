@@ -75,12 +75,12 @@ def skewness(xs, ys, dys, dxs):
     val = num / den
 
     diffs = xs - m1[0][:, None]
-    T = tot[0]
+    t = tot[0]
 
-    # Correct moment derivatives: ∂μ₂/∂yᵢ = dxs * ((λᵢ - μ₁)² - μ₂) / T
+    # Correct moment derivatives: ∂μ₂/∂yᵢ = dxs * ((λᵢ - μ₁)² - μ₂) / t
     # (derivatives w.r.t. y account for flux integration weight dxs)
-    dmu2 = (diffs**2 - m2[0][:, None]) * dxs / T
-    dmu3 = (diffs**3 - m3[0][:, None] - 3 * m2[0][:, None] * diffs) * dxs / T
+    dmu2 = (diffs**2 - m2[0][:, None]) * dxs / t
+    dmu3 = (diffs**3 - m3[0][:, None] - 3 * m2[0][:, None] * diffs) * dxs / t
 
     # Skewness partial derivatives
     dgamma_dmu2 = -1.5 * m3[0] / (m2[0] ** 2.5)
@@ -154,42 +154,42 @@ def uncertainties_total(ys_u, dxs):
 
 
 def uncertainties_nth_moment(n, xs, ys_u, dxs):
-    T = np.sum(ys_u * dxs)
+    tot = np.sum(ys_u * dxs)
     if n == 0:
-        return T
-    return np.sum(ys_u * xs**n * dxs) / T
+        return tot
+    return np.sum(ys_u * xs**n * dxs) / tot
 
 
 def uncertainties_nth_central_moment(n, xs, ys_u, dxs):
-    T = np.sum(ys_u * dxs)
+    tot = np.sum(ys_u * dxs)
     if n == 0:
-        return T
-    m1 = np.sum(ys_u * xs * dxs) / T
+        return tot
+    m1 = np.sum(ys_u * xs * dxs) / tot
     if n == 1:
         return m1
-    return np.sum(ys_u * (xs - m1) ** n * dxs) / T
+    return np.sum(ys_u * (xs - m1) ** n * dxs) / tot
 
 
 def uncertainties_dispersion(xs, ys_u, dxs):
-    T = np.sum(ys_u * dxs)
-    m1 = np.sum(ys_u * xs * dxs) / T
-    mu2 = np.sum(ys_u * (xs - m1) ** 2 * dxs) / T
+    tot = np.sum(ys_u * dxs)
+    m1 = np.sum(ys_u * xs * dxs) / tot
+    mu2 = np.sum(ys_u * (xs - m1) ** 2 * dxs) / tot
     return mu2**0.5 / m1
 
 
 def uncertainties_skewness(xs, ys_u, dxs):
-    T = np.sum(ys_u * dxs)
-    m1 = np.sum(ys_u * xs * dxs) / T
-    mu2 = np.sum(ys_u * (xs - m1) ** 2 * dxs) / T
-    mu3 = np.sum(ys_u * (xs - m1) ** 3 * dxs) / T
+    tot = np.sum(ys_u * dxs)
+    m1 = np.sum(ys_u * xs * dxs) / tot
+    mu2 = np.sum(ys_u * (xs - m1) ** 2 * dxs) / tot
+    mu3 = np.sum(ys_u * (xs - m1) ** 3 * dxs) / tot
     return mu3 / mu2**1.5
 
 
 def uncertainties_kurtosis(xs, ys_u, dxs):
-    T = np.sum(ys_u * dxs)
-    m1 = np.sum(ys_u * xs * dxs) / T
-    mu2 = np.sum(ys_u * (xs - m1) ** 2 * dxs) / T
-    mu4 = np.sum(ys_u * (xs - m1) ** 4 * dxs) / T
+    tot = np.sum(ys_u * dxs)
+    m1 = np.sum(ys_u * xs * dxs) / tot
+    mu2 = np.sum(ys_u * (xs - m1) ** 2 * dxs) / tot
+    mu4 = np.sum(ys_u * (xs - m1) ** 4 * dxs) / tot
     return mu4 / mu2**2
 
 
@@ -315,7 +315,7 @@ def spectrum(request):
 # ---------------------------------------------------------------------------
 class TestTotal:
     def test_value(self, spectrum):
-        xs, ys, dys, dxs = spectrum
+        _, ys, dys, dxs = spectrum
         ys_u = unumpy.uarray(ys, dys)
 
         code_val, _ = total(ys[None, :], dys[None, :], dxs[None, :])
@@ -324,7 +324,7 @@ class TestTotal:
         assert code_val[0] == pytest.approx(ref.nominal_value, rel=1e-12)
 
     def test_uncertainty(self, spectrum):
-        xs, ys, dys, dxs = spectrum
+        _, ys, dys, dxs = spectrum
         ys_u = unumpy.uarray(ys, dys)
 
         _, code_unc = total(ys[None, :], dys[None, :], dxs[None, :])

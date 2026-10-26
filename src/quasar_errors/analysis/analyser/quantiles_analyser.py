@@ -1,7 +1,8 @@
 from functools import wraps
 from itertools import repeat
 
-import pydantic
+from pydantic import validate_call
+from pydantic.dataclasses import dataclass
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
 
@@ -9,7 +10,7 @@ from ..measure_result import FrozenMeasureResult
 from .base_analyser import _BaseAnalyser
 
 
-@pydantic.dataclasses.dataclass
+@dataclass
 class QuantilesAnalyser(_BaseAnalyser):
     """
     Analyser for calculating quantiles of emission line profiles, as well as 
@@ -42,8 +43,11 @@ class QuantilesAnalyser(_BaseAnalyser):
     user. They are simple wrappers of their corresponding private methods using 
     `pydantic.validate_call`.
     """
-    @lru_cache
-    def _measureQuantile(
+
+    ### Public API
+
+    @validate_call
+    def measureQuantile(
         self,
         q: float,
         *,
@@ -53,12 +57,191 @@ class QuantilesAnalyser(_BaseAnalyser):
         """
         Calculate the wavelength value at the corresponding quantile, `q`.
         """
+        return self._measureQuantile(
+            q,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureMedian(
+        self,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the wavelength value at the median (0.5 quantile).
+        """
+        return self._measureMedian(
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureMedianOffset(
+        self,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the velocity offset (km/s) of the median w.r.t. the centre.
+        """
+        return self._measureMedianOffset(
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureIPBounds(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> tuple[FrozenMeasureResult, FrozenMeasureResult]:
+        """
+        Calculate the inter-percentile wavelength bounds.
+        """
+        return self._measureIPBounds(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureIPWidth(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the inter-percentile wavelength width.
+        """
+        return self._measureIPWidth(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureIPVelocity(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the inter-percentile velocity width (km/s).
+        """
+        return self._measureIPVelocity(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureWhittleBounds(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> tuple[FrozenMeasureResult, FrozenMeasureResult]:
+        """
+        Calculate the Whittle velocity bounds (km/s).
+        """
+        return self._measureWhittleBounds(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureWhittleA(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the Whittle 'a' bound (km/s).
+        """
+        return self._measureWhittleA(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureWhittleB(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the Whittle 'b' bound (km/s).
+        """
+        return self._measureWhittleB(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureWhittleShift(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the Whittle shift parameter (km/s): S = a - b.
+        """
+        return self._measureWhittleShift(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    @validate_call
+    def measureWhittleAsymmetry(
+        self,
+        p: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
+        """
+        Calculate the Whittle asymmetry parameter: A = (a - b) / (a + b).
+        """
+        return self._measureWhittleAsymmetry(
+            p,
+            from_model=from_model,
+            bg_flux=bg_flux,
+        )
+
+    ### Private API
+
+    @wraps(measureQuantile)
+    @lru_cache
+    def _measureQuantile(
+        self,
+        q: float,
+        *,
+        from_model: bool = True,
+        bg_flux: BackgroundFlux | None = None,
+    ) -> FrozenMeasureResult:
         if bg_flux is None:
-            return self._measureQuantile(
-                q,
-                from_model=from_model,
-                bg_flux=BackgroundFlux({"all", "em"}),
-            )
+            bg_flux = BackgroundFlux({"all", "em"})
 
         out = self.getOut(self._wave_unit)
         if from_model:
@@ -76,6 +259,7 @@ class QuantilesAnalyser(_BaseAnalyser):
                 (sample.em.cdf for sample in self.error_result),
                 repeat(self.x, n_em),
             )
+            index = slice(None, n_em)
         else:
             from quasar_errors.measures.approx import get_quantile
 
@@ -102,22 +286,22 @@ class QuantilesAnalyser(_BaseAnalyser):
                 (y[m] for y, m in zip(flux, mask)), 
                 (self.dx[m] for m in mask),
             )
+            index = slice(None, n)
 
         out.update_with_single_values(
             list(self.starmap(get_quantile, args_iter)),
-            index=slice(None, n),
+            index=index,
         )
         return out.freeze()
 
+
+    @wraps(measureMedian)
     def _measureMedian(
         self,
         *,
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the wavelength value at the median (0.5 quantile).
-        """
         if bg_flux is None:
             return self._measureQuantile(
                 0.5,
@@ -131,15 +315,14 @@ class QuantilesAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
+
+    @wraps(measureMedianOffset)
     def _measureMedianOffset(
         self,
         *,
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the velocity offset (km/s) of the median w.r.t. the centre.
-        """
         if bg_flux is None:
             return self._measureMedianOffset(
                 from_model=from_model,
@@ -153,6 +336,8 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
         return (median / (self.wave * self._wave_unit) - 1).to_c()
 
+
+    @wraps(measureIPBounds)
     def _measureIPBounds(
         self,
         p: float,
@@ -160,9 +345,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> tuple[FrozenMeasureResult, FrozenMeasureResult]:
-        """
-        Calculate the inter-percentile wavelength bounds.
-        """
         if bg_flux is None:
             return self._measureIPBounds(
                 from_model=from_model,
@@ -175,6 +357,8 @@ class QuantilesAnalyser(_BaseAnalyser):
             func(1 - p / 200, from_model=from_model, bg_flux=bg_flux),
         )
 
+
+    @wraps(measureIPWidth)
     def _measureIPWidth(
         self,
         p: float,
@@ -182,9 +366,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the inter-percentile wavelength width.
-        """
         if bg_flux is None:
             return self._measureIPWidth(
                 p,
@@ -199,6 +380,8 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
         return upper - lower
 
+
+    @wraps(measureIPVelocity)
     def _measureIPVelocity(
         self,
         p: float,
@@ -227,7 +410,9 @@ class QuantilesAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
         return (ipw / median).to_c()
-
+    
+    
+    @wraps(measureWhittleBounds)
     def _measureWhittleBounds(
         self,
         p: float,
@@ -235,9 +420,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> tuple[FrozenMeasureResult, FrozenMeasureResult]:
-        """
-        Calculate the Whittle velocity bounds (km/s).
-        """
         if bg_flux is None:
             return self._measureWhittleBounds(
                 p,
@@ -260,7 +442,9 @@ class QuantilesAnalyser(_BaseAnalyser):
             abs(lower / m - 1).to_c(), 
             abs(upper / m - 1).to_c(),
         )
-
+    
+    
+    @wraps(measureWhittleA)
     def _measureWhittleA(
         self,
         p: float,
@@ -268,9 +452,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the Whittle 'a' bound (km/s).
-        """
         if bg_flux is None:
             return self._measureWhittleA(
                 p,
@@ -288,6 +469,8 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
         return abs(lower / m - 1).to_c()
 
+
+    @wraps(measureWhittleB)
     def _measureWhittleB(
         self,
         p: float,
@@ -295,9 +478,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the Whittle 'b' bound (km/s).
-        """
         if bg_flux is None:
             return self._measureWhittleB(
                 p,
@@ -315,6 +495,8 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
         return abs(upper / m - 1).to_c()
 
+
+    @wraps(measureWhittleShift)
     def _measureWhittleShift(
         self,
         p: float,
@@ -322,9 +504,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the Whittle shift parameter (km/s): S = a - b.
-        """
         if bg_flux is None:
             return self._measureWhittleShift(
                 p,
@@ -339,6 +518,8 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
         return a - b
 
+
+    @wraps(measureWhittleAsymmetry)
     @lru_cache
     def _measureWhittleAsymmetry(
         self,
@@ -347,9 +528,6 @@ class QuantilesAnalyser(_BaseAnalyser):
         from_model: bool = True,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
-        """
-        Calculate the Whittle asymmetry parameter: A = (a - b) / (a + b).
-        """
         from numpy import hypot
 
         if bg_flux is None:
@@ -379,166 +557,3 @@ class QuantilesAnalyser(_BaseAnalyser):
             )
         )
         return out.freeze()
-
-    ### Public methods
-
-    @wraps(_measureQuantile)
-    @pydantic.validate_call
-    def measureQuantile(
-        self,
-        q: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureQuantile(
-            q,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureMedian)
-    @pydantic.validate_call
-    def measureMedian(
-        self,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureMedian(
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureMedianOffset)
-    @pydantic.validate_call
-    def measureMedianOffset(
-        self,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureMedianOffset(
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureIPBounds)
-    @pydantic.validate_call
-    def measureIPBounds(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> tuple[FrozenMeasureResult, FrozenMeasureResult]:
-        return self._measureIPBounds(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureIPWidth)
-    @pydantic.validate_call
-    def measureIPWidth(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureIPWidth(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureIPVelocity)
-    @pydantic.validate_call
-    def measureIPVelocity(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureIPVelocity(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureWhittleBounds)
-    @pydantic.validate_call
-    def measureWhittleBounds(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> tuple[FrozenMeasureResult, FrozenMeasureResult]:
-        return self._measureWhittleBounds(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureWhittleA)
-    @pydantic.validate_call
-    def measureWhittleA(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureWhittleA(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureWhittleB)
-    @pydantic.validate_call
-    def measureWhittleB(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureWhittleB(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureWhittleShift)
-    @pydantic.validate_call
-    def measureWhittleShift(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureWhittleShift(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-
-    @wraps(_measureWhittleAsymmetry)
-    @pydantic.validate_call
-    def measureWhittleAsymmetry(
-        self,
-        p: float,
-        *,
-        from_model: bool = True,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        return self._measureWhittleAsymmetry(
-            p,
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )

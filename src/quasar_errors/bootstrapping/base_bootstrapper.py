@@ -340,6 +340,8 @@ class BaseBootstrapper:
         """
         Corresponding 'Sample' object for the original data.
         """
+        from quasar_utils.resolving import mask_kernels
+        
         mask = self.comp_mask & self.eval_mask
         x = self.x[mask]
         y = self.y[mask]
@@ -366,11 +368,11 @@ class BaseBootstrapper:
                 mask.size,
             )
             preparer = PrepareModel(
-                x=self.x,
+                x=x,
                 model=self.full_model,
-                eval_mask=self.eval_mask,
-                comp_mask=self.comp_mask,
-                kernels=self.kernels,
+                # eval_mask=self.eval_mask,
+                # comp_mask=self.comp_mask,
+                kernels=mask_kernels(self.kernels, mask),
                 is_logbinned=self.is_logbinned,
             )
             with preparer as (seq_model, _):

@@ -76,7 +76,7 @@ def test_u_xinterp_100_random_points():
     # Generate random signal
     n = 50
     x_vals = np.linspace(0, 10, n)
-    y_vals = np.sin(x_vals) + np.random.randn(n) * 0.05
+    y_vals = np.sort(np.sin(x_vals) + np.random.randn(n) * 0.05)
     dy_vals = 0.01 + np.random.rand(n) * 0.05
 
     # Test on 100 random interpolation points
