@@ -1,8 +1,0 @@
-numpy>=1.26
-scipy>=1.16
-astropy>=7.0
-pydantic>=2.12
-numba
-quasar-typing
-quasar-models
-quasar-utils
