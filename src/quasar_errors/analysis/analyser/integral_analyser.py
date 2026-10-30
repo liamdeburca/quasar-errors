@@ -68,10 +68,7 @@ class IntegralAnalyser(_BaseAnalyser):
                 n = max(n, self.n_em)
                 ys += self.y_em[:,mask]
 
-            out.update_with_single_values(
-                (ys * dxs).sum(axis=1),
-                index=slice(None, n),
-            )
+            out.val[:n] = (ys * dxs).sum(axis=-1)
         else:
             from ..spectrum_inner import total
 
@@ -81,11 +78,10 @@ class IntegralAnalyser(_BaseAnalyser):
                 simplify=True,
             )[:,mask]
             dys = self.dy[mask][None,:]
+            tot = total(ys, dxs, dys) 
 
-            out.update_with_single_values(
-                total(ys, dxs, dys),
-                index=slice(None, ys.shape[0]),
-            )
+            out.val[:ys.shape[0]] = tot.val
+            out.unc[:ys.shape[0]] = tot.unc
 
         return out.freeze()
 
@@ -236,9 +232,6 @@ class IntegralAnalyser(_BaseAnalyser):
                 simplify=False,
             )[:n]
 
-            xs = (self.x[m] for m in mask)
-            dxs = (self.dx[m] for m in mask)
-
             if self.n_pl < n:
                 # Assume: constant power law continuum
                 ems = (sample.em for sample in self.error_result)
@@ -251,8 +244,8 @@ class IntegralAnalyser(_BaseAnalyser):
                 ems = (sample.em for sample in self.error_result)
                 pls = (sample.pl for sample in self.error_result)
 
-            weights = (em(x) * dx for em, x, dx in zip(ems, xs, dxs))
-            inv_continua = (1 / pl(x) for pl, x in zip(pls, xs))
+            weights = (em(self.x[m]) * self.dx[m] for em, m in zip(ems, mask))
+            inv_continua = (1 / pl(self.x[m]) for pl, m in zip(pls, mask))
         else:
             bg_flux = BackgroundFlux({"all", "em"})
             n_em = self._getNWeights(
@@ -288,10 +281,7 @@ class IntegralAnalyser(_BaseAnalyser):
                 inv_continua[:] = 1 / self.y_pl
 
         out.update_with_single_values(
-            [
-                np.dot(weights_i, inv_continua_i) 
-                for weights_i, inv_continua_i in zip(weights, inv_continua)
-            ],
+            [np.dot(*args) for args in zip(weights, inv_continua)],
             index=slice(None, n),
         )
         return out.freeze()

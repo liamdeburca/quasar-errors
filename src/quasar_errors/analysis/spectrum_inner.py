@@ -60,7 +60,10 @@ def _nth_moment(
     if n == 0:
         return tot
 
-    val = (ys * xs**n * dxs).sum(axis=-1) / tot[0]
+    ps = (ys * dxs)
+    ps /= ps.sum(axis=-1, keepdims=True)
+
+    val = (xs**n * ps).sum(axis=-1)
     ds = xs**n - val[:, None]
     unc = (dys**2 * dxs**2 * ds**2).sum(axis=-1) ** 0.5 / tot[0]
 
@@ -305,10 +308,8 @@ def nth_moment(
     return MeasureResult(
         *_nth_moment(
             n,
-            xs,
-            ys,
-            dxs,
-            dys,
+            xs, ys,
+            dxs, dys,
             tot=tot if (tot is None) else tot.to_tuple(),
         )
     )

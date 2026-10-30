@@ -26,7 +26,12 @@ def nth_moment(n, xs, ys, dys, dxs, *, tot=None):
         tot = total(ys, dys, dxs)
     if n == 0:
         return tot
-    val = (ys * xs**n * dxs).sum(axis=1) / tot[0]
+
+    ps = (ys * dxs)
+    ps /= ps.sum(axis=1, keepdims=True)
+
+    val = (xs**n * ps).sum(axis=1)
+    # val = (ys * xs**n * dxs).sum(axis=1) / tot[0]
     unc = (dys**2 * dxs**2 * (xs**n - val[:, None]) ** 2).sum(
         axis=1
     ) ** 0.5 / tot[0]
@@ -157,7 +162,11 @@ def uncertainties_nth_moment(n, xs, ys_u, dxs):
     tot = np.sum(ys_u * dxs)
     if n == 0:
         return tot
-    return np.sum(ys_u * xs**n * dxs) / tot
+    
+    ps = (ys_u * dxs)
+    ps /= ps.sum(axis=1, keepdims=True)
+    
+    return np.sum(xs**n * ps, axis=1)
 
 
 def uncertainties_nth_central_moment(n, xs, ys_u, dxs):

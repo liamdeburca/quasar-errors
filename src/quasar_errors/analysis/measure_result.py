@@ -193,7 +193,7 @@ class _MeasureResult(ABC):
 
         val = np.full(self.val.size, np.nan, dtype=np.float64)
         unc = np.full(self.unc.size, 0.0, dtype=np.float64)
-        mask = np.isfinite(self.val) & np.isfinite(num.val)
+        mask = np.isfinite(self.val) & np.isfinite(num.val) & (num.val != 0)
 
         val[mask] = self.val[mask] / num.val[mask]
         unc[mask] = np.hypot(

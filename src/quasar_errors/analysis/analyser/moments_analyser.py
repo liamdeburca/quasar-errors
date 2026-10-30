@@ -153,10 +153,8 @@ class MomentsAnalyser(_BaseAnalyser):
 
             _out = nth_moment(
                 1,
-                moment_params.xs,
-                ys,
-                moment_params.dxs,
-                dys,
+                moment_params.xs, ys,
+                moment_params.dxs, dys,
                 tot=moment_params.tot,
             )
 
@@ -220,10 +218,8 @@ class MomentsAnalyser(_BaseAnalyser):
             dys = np.where(mask, moment_params.dys, 0)
             _out = nth_central_moment(
                 2,
-                moment_params.xs,
-                ys,
-                moment_params.dxs,
-                dys,
+                moment_params.xs, ys,
+                moment_params.dxs, dys,
                 m1=m1,
                 tot=moment_params.tot,
             )
@@ -289,10 +285,8 @@ class MomentsAnalyser(_BaseAnalyser):
             dys = np.where(mask, moment_params.dys, 0)
             _out = nth_central_moment(
                 3,
-                moment_params.xs,
-                ys,
-                moment_params.dxs,
-                dys,
+                moment_params.xs, ys,
+                moment_params.dxs, dys,
                 m1=moment_params.m1,
                 tot=moment_params.tot,
             )
@@ -357,10 +351,8 @@ class MomentsAnalyser(_BaseAnalyser):
             dys = np.where(mask, moment_params.dys, 0)
             _out = nth_central_moment(
                 4,
-                moment_params.xs,
-                ys,
-                moment_params.dxs,
-                dys,
+                moment_params.xs, ys,
+                moment_params.dxs, dys,
                 m1=moment_params.m1,
                 tot=moment_params.tot,
             )
@@ -470,10 +462,8 @@ class MomentsAnalyser(_BaseAnalyser):
 
         dys = np.where(mask, moment_params.dys, 0)
         _out = dispersion(
-            moment_params.xs,
-            ys,
-            moment_params.dxs,
-            dys,
+            moment_params.xs, ys,
+            moment_params.dxs, dys,
             tot=moment_params.tot,
             m1=moment_params.m1,
             cm2=moment_params.cm2,
@@ -537,6 +527,7 @@ class MomentsAnalyser(_BaseAnalyser):
         self,
         *,
         from_model: bool = True,
+        excess: bool = False,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
         """
@@ -547,6 +538,12 @@ class MomentsAnalyser(_BaseAnalyser):
                 from_model=from_model,
                 bg_flux=BackgroundFlux({"all", "em"}),
             )
+
+        if excess:
+            return self._measureKurtosis(
+                from_model=from_model,
+                bg_flux=bg_flux,
+            ) - 3.0
 
         moment_params = self._getMomentParams(
             from_model=from_model,
@@ -582,30 +579,7 @@ class MomentsAnalyser(_BaseAnalyser):
         out.update(_out, index=slice(None, ys.shape[0]))
 
         return out.freeze()
-
-    def _measureKurtosis(
-        self,
-        *,
-        from_model: bool = True,
-        excess: bool = False,
-        bg_flux: BackgroundFlux | None = None,
-    ) -> FrozenMeasureResult:
-        """
-        Calculates the kurtosis of all samples. If 'excess' is set to True, the
-        excess kurtosis is calculated.
-        """
-        if bg_flux is None:
-            return self._measureKurtosis(
-                from_model=from_model,
-                excess=excess,
-                bg_flux=BackgroundFlux({"all", "em"}),
-            )
-
-        kurt = self._measureKurtosis(
-            from_model=from_model,
-            bg_flux=bg_flux,
-        )
-        return (kurt - 3.0) if excess else kurt
+    
 
     def _measureStrength(
         self,
@@ -765,10 +739,12 @@ class MomentsAnalyser(_BaseAnalyser):
         self,
         *,
         from_model: bool = True,
+        excess: bool = False,
         bg_flux: BackgroundFlux | None = None,
     ) -> FrozenMeasureResult:
         return self._measureKurtosis(
             from_model=from_model,
+            excess=excess,
             bg_flux=bg_flux,
         )
 
