@@ -1,12 +1,12 @@
 from collections.abc import Callable, Iterable, Iterator
-from dataclasses import field
-from functools import cached_property, wraps
+from functools import cached_property
 from itertools import starmap, takewhile
 from typing import ClassVar, Literal, Self, TypedDict
 
 import numpy as np
-import pydantic
 from astropy.units import Unit
+from pydantic import validate_call
+from pydantic.dataclasses import Field, dataclass
 from quasar_typing.astropy import CompositeUnitType, UnitType
 from quasar_typing.literals import FWHMStrategy
 from quasar_typing.multiprocessing import PoolType
@@ -15,7 +15,8 @@ from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
 from quasar_utils.setup import Info
 
-from ...error_result import ErrorResult
+from quasar_errors.error_result import ErrorResult
+
 from ..measure_result import MeasureResult
 from ..moment_params import MomentParams
 
@@ -44,7 +45,7 @@ class DiscretisedCoords(TypedDict):
     dxs: FloatVector
 
 
-@pydantic.dataclasses.dataclass(repr=False)
+@dataclass(repr=False)
 class _BaseAnalyser:
     """
     Notes
@@ -59,37 +60,37 @@ class _BaseAnalyser:
     """
     error_result: ErrorResult
 
-    pool: PoolType | None = field(default=None, kw_only=True)
-    info: Info = field(default_factory=Info, kw_only=True)
+    pool: PoolType | None = Field(default=None, kw_only=True)
+    info: Info = Field(default_factory=Info, kw_only=True)
 
     # Hyperparameters
-    res: int | None = field(default=None, kw_only=True)
-    render_width: float | None = field(default=None, kw_only=True)
-    fwhm_strategy: FWHMStrategy | None = field(default=None, kw_only=True)
-    v_int: float | None = field(default=None, kw_only=True)
-    ipv_int: float | None = field(default=None, kw_only=True)
-    dx_int: float | None = field(default=None, kw_only=True)
+    res: int | None = Field(default=None, kw_only=True)
+    render_width: float | None = Field(default=None, kw_only=True)
+    fwhm_strategy: FWHMStrategy | None = Field(default=None, kw_only=True)
+    v_int: float | None = Field(default=None, kw_only=True)
+    ipv_int: float | None = Field(default=None, kw_only=True)
+    dx_int: float | None = Field(default=None, kw_only=True)
 
-    line: str | set[str] | None = field(init=False)
-    _waves: set[float] | None = field(init=False, repr=False)
-    wave: float | None = field(init=False, repr=False)
+    line: str | set[str] | None = Field(init=False)
+    _waves: set[float] | None = Field(init=False, repr=False)
+    wave: float | None = Field(init=False, repr=False)
 
-    sample_weights: FloatVector = field(init=False)
-    x: FloatVector = field(init=False)
-    y: FloatVector = field(init=False)
-    dx: FloatVector = field(init=False)
-    dy: FloatVector = field(init=False)
-    n_samples: int = field(init=False)
-    n_pix: int = field(init=False)
+    sample_weights: FloatVector = Field(init=False)
+    x: FloatVector = Field(init=False)
+    y: FloatVector = Field(init=False)
+    dx: FloatVector = Field(init=False)
+    dy: FloatVector = Field(init=False)
+    n_samples: int = Field(init=False)
+    n_pix: int = Field(init=False)
 
     # Correction for when IPV bounds are used. 
-    mask_correction: float = field(default=1.0, init=False)
+    mask_correction: float = Field(default=1.0, init=False)
 
     methods: ClassVar[frozenset[str]]
     measures: ClassVar[frozenset[str]]
 
     @classmethod
-    @pydantic.validate_call
+    @validate_call
     def create(
         cls, 
         error_result: ErrorResult,
@@ -768,8 +769,7 @@ class _BaseAnalyser:
 
     ### Public methods
 
-    @wraps(_getMask)
-    @pydantic.validate_call
+    @validate_call
     def getMask(
         self,
         *,
@@ -783,8 +783,7 @@ class _BaseAnalyser:
             simplify=simplify,
         )
 
-    @wraps(_getFlux)
-    @pydantic.validate_call
+    @validate_call
     def getFlux(
         self,
         *,
@@ -798,8 +797,7 @@ class _BaseAnalyser:
             simplify=simplify,
         )
 
-    @wraps(_getFluxWeights)
-    @pydantic.validate_call
+    @validate_call
     def getFluxWeights(
         self,
         *,
@@ -821,8 +819,7 @@ class _BaseAnalyser:
             normalize=normalize,
         )
 
-    @wraps(_getNWeights)
-    @pydantic.validate_call
+    @validate_call
     def getNWeights(
         self,
         *,
@@ -838,8 +835,7 @@ class _BaseAnalyser:
             ensure_not_negative=ensure_not_negative,
         )
 
-    @wraps(_getMomentParams)
-    @pydantic.validate_call
+    @validate_call
     def getMomentParams(
         self,
         *,

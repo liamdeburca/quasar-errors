@@ -1,7 +1,6 @@
-from functools import wraps
-
 import numpy as np
-import pydantic
+from pydantic import validate_call
+from pydantic.dataclasses import dataclass
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
 
@@ -9,7 +8,7 @@ from ..measure_result import FrozenMeasureResult
 from .base_analyser import _BaseAnalyser
 
 
-@pydantic.dataclasses.dataclass
+@dataclass
 class MomentsAnalyser(_BaseAnalyser):
     """
     Analyser for calculating statistical moment of emission line profiles, as 
@@ -603,8 +602,8 @@ class MomentsAnalyser(_BaseAnalyser):
 
     ### Public methods
 
-    @wraps(_measureZerothMoment)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureZerothMoment(
         self,
         *,
@@ -616,8 +615,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureFirstMoment)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureFirstMoment(
         self,
         *,
@@ -629,8 +628,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureSecondCentralMoment)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureSecondCentralMoment(
         self,
         *,
@@ -642,8 +641,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureThirdCentralMoment)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureThirdCentralMoment(
         self,
         *,
@@ -655,8 +654,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureFourthCentralMoment)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureFourthCentralMoment(
         self,
         *,
@@ -668,8 +667,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureCentroid)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureCentroid(
         self,
         *,
@@ -681,8 +680,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureCentroidOffset)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureCentroidOffset(
         self,
         *,
@@ -694,8 +693,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureDispersion)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureDispersion(
         self,
         *,
@@ -707,8 +706,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureVelocityDispersion)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureVelocityDispersion(
         self,
         *,
@@ -720,8 +719,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureSkewness)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureSkewness(
         self,
         *,
@@ -733,8 +732,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureKurtosis)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureKurtosis(
         self,
         *,
@@ -748,8 +747,8 @@ class MomentsAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureStrength)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureStrength(
         self,
         *,

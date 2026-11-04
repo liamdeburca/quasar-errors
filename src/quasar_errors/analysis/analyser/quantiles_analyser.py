@@ -1,4 +1,3 @@
-from functools import wraps
 from itertools import repeat
 
 from pydantic import validate_call
@@ -231,7 +230,7 @@ class QuantilesAnalyser(_BaseAnalyser):
 
     ### Private API
 
-    @wraps(measureQuantile)
+    
     @lru_cache
     def _measureQuantile(
         self,
@@ -295,7 +294,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return out.freeze()
 
 
-    @wraps(measureMedian)
+    
     def _measureMedian(
         self,
         *,
@@ -316,7 +315,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
 
 
-    @wraps(measureMedianOffset)
+    
     def _measureMedianOffset(
         self,
         *,
@@ -337,7 +336,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return (median / (self.wave * self._wave_unit) - 1).to_c()
 
 
-    @wraps(measureIPBounds)
+    
     def _measureIPBounds(
         self,
         p: float,
@@ -358,7 +357,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
 
 
-    @wraps(measureIPWidth)
+    
     def _measureIPWidth(
         self,
         p: float,
@@ -381,7 +380,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return upper - lower
 
 
-    @wraps(measureIPVelocity)
+    
     def _measureIPVelocity(
         self,
         p: float,
@@ -412,7 +411,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return (ipw / median).to_c()
     
     
-    @wraps(measureWhittleBounds)
+    
     def _measureWhittleBounds(
         self,
         p: float,
@@ -444,7 +443,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         )
     
     
-    @wraps(measureWhittleA)
+    
     def _measureWhittleA(
         self,
         p: float,
@@ -470,7 +469,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return abs(lower / m - 1).to_c()
 
 
-    @wraps(measureWhittleB)
+    
     def _measureWhittleB(
         self,
         p: float,
@@ -496,7 +495,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return abs(upper / m - 1).to_c()
 
 
-    @wraps(measureWhittleShift)
+    
     def _measureWhittleShift(
         self,
         p: float,
@@ -519,7 +518,7 @@ class QuantilesAnalyser(_BaseAnalyser):
         return a - b
 
 
-    @wraps(measureWhittleAsymmetry)
+    
     @lru_cache
     def _measureWhittleAsymmetry(
         self,

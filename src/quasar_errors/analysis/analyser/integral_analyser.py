@@ -1,9 +1,9 @@
-from functools import wraps
 from itertools import repeat
 from typing import Literal
 
 import numpy as np
-import pydantic
+from pydantic import validate_call
+from pydantic.dataclasses import dataclass
 from quasar_typing.bounds import CoordBounds
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
@@ -12,7 +12,7 @@ from ..measure_result import FrozenMeasureResult
 from .base_analyser import _BaseAnalyser
 
 
-@pydantic.dataclasses.dataclass
+@dataclass
 class IntegralAnalyser(_BaseAnalyser):
     """
     Notes
@@ -288,8 +288,7 @@ class IntegralAnalyser(_BaseAnalyser):
 
     ### Public methods
 
-    @wraps(_measureIntegratedFlux)
-    @pydantic.validate_call
+    @validate_call
     def measureIntegratedFlux(
         self,
         x_bounds: CoordBounds,
@@ -303,8 +302,8 @@ class IntegralAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureAverageFluxDensity)
-    @pydantic.validate_call
+
+    @validate_call
     def measureAverageFlux(
         self,
         x_bounds: CoordBounds,
@@ -318,8 +317,8 @@ class IntegralAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureComponentFlux)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureComponentFlux(
         self,
         x: float,
@@ -333,8 +332,8 @@ class IntegralAnalyser(_BaseAnalyser):
             from_model=from_model,
         )
 
-    @wraps(_measurePLFlux)
-    @pydantic.validate_call
+    
+    @validate_call
     def measurePLFlux(
         self,
         x: float,
@@ -346,8 +345,8 @@ class IntegralAnalyser(_BaseAnalyser):
             from_model=from_model,
         )
 
-    @wraps(_measureFEFlux)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureFEFlux(
         self,
         x: float,
@@ -359,8 +358,8 @@ class IntegralAnalyser(_BaseAnalyser):
             from_model=from_model,
         )
 
-    @wraps(_measureBAFlux)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureBAFlux(
         self,
         x: float,
@@ -372,8 +371,8 @@ class IntegralAnalyser(_BaseAnalyser):
             from_model=from_model,
         )
 
-    @wraps(_measureHGFlux)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureHGFlux(
         self,
         x: float,
@@ -385,8 +384,8 @@ class IntegralAnalyser(_BaseAnalyser):
             from_model=from_model,
         )
 
-    @wraps(_measureEMFlux)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureEMFlux(
         self,
         x: float,
@@ -398,8 +397,8 @@ class IntegralAnalyser(_BaseAnalyser):
             from_model=from_model,
         )
 
-    @wraps(_measureEW)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureEW(
         self,
         *,

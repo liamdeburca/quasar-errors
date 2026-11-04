@@ -1,4 +1,3 @@
-from functools import wraps
 from itertools import repeat
 
 from pydantic import validate_call
@@ -234,7 +233,6 @@ class DiscreteAnalyser(_BaseAnalyser):
 
     ### Private API
 
-    @wraps(measurePeak)
     @lru_cache
     def _measurePeak(
         self,
@@ -305,7 +303,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         return (modes.freeze(), maxs.freeze())
 
     
-    @wraps(measureMode)
     def _measureMode(
         self,
         *,
@@ -324,7 +321,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         )[0]
 
 
-    @wraps(measureModeOffset)
     def _measureModeOffset(
         self,
         *,
@@ -344,7 +340,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         return (mode / (self.wave * self._wave_unit) - 1).to_c()
 
 
-    @wraps(measureMax)
     def _measureMax(
         self,
         *,
@@ -363,7 +358,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         )[1]
 
 
-    @wraps(measureLeftEdge)
     @lru_cache
     def _measureLeftEdge(
         self,
@@ -443,7 +437,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         return out.freeze()
 
 
-    @wraps(measureRightEdge)
     @lru_cache
     def _measureRightEdge(
         self,
@@ -526,7 +519,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         return out.freeze()
     
     
-    @wraps(measureFWHM)
     def _measureFWHM(
         self,
         *,
@@ -552,7 +544,7 @@ class DiscreteAnalyser(_BaseAnalyser):
         return fwhm
 
 
-    @wraps(measureLeftEdgeVelocity)
+    
     def _measureLeftEdgeVelocity(
         self,
         *,
@@ -579,7 +571,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         return (left_edge / mode).to_c()
     
     
-    @wraps(measureRightEdgeVelocity)
     def _measureRightEdgeVelocity(
         self,
         *,
@@ -605,8 +596,7 @@ class DiscreteAnalyser(_BaseAnalyser):
         )
         return (right_edge / mode).to_c()
 
-
-    @wraps(measureFWHMVelocity)
+    
     def _measureFWHMVelocity(
         self,
         *,
@@ -633,7 +623,6 @@ class DiscreteAnalyser(_BaseAnalyser):
         return (fwhm / mode).to_c()
     
     
-    @wraps(measureWhittleK1)
     @lru_cache
     def _measureWhittleK1(
         self,
@@ -659,8 +648,7 @@ class DiscreteAnalyser(_BaseAnalyser):
         )
         return 1.524 * fwhm / fw20
 
-
-    @wraps(measureWhittleK2)
+    
     def _measureWhittleK2(
         self,
         *,

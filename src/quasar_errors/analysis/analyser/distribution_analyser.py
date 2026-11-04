@@ -1,6 +1,5 @@
-from functools import wraps
-
-import pydantic
+from pydantic import validate_call
+from pydantic.dataclasses import dataclass
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
 
@@ -8,7 +7,7 @@ from ..measure_result import FrozenMeasureResult
 from .base_analyser import _BaseAnalyser
 
 
-@pydantic.dataclasses.dataclass
+@dataclass
 class DistributionAnalyser(_BaseAnalyser):
     """
     Notes
@@ -215,8 +214,7 @@ class DistributionAnalyser(_BaseAnalyser):
 
     ### Public methods
 
-    @wraps(_measureMAD)
-    @pydantic.validate_call
+    @validate_call
     def measureMAD(
         self,
         *,
@@ -228,8 +226,7 @@ class DistributionAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureMADVelocity)
-    @pydantic.validate_call
+    @validate_call
     def measureMADVelocity(
         self,
         *,
@@ -241,8 +238,7 @@ class DistributionAnalyser(_BaseAnalyser):
             bg_flux=bg_flux,
         )
 
-    @wraps(_measureAAD)
-    @pydantic.validate_call
+    @validate_call
     def measureAAD(
         self,
         *,
@@ -253,9 +249,8 @@ class DistributionAnalyser(_BaseAnalyser):
             from_model=from_model,
             bg_flux=bg_flux,
         )
-
-    @wraps(_measureAADVelocity)
-    @pydantic.validate_call
+    
+    @validate_call
     def measureAADVelocity(
         self,
         *,
