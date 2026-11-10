@@ -25,7 +25,7 @@ def test_add_float():
     """Test adding a float to MeasureResult. Validated against uncertainties module."""
     val = array([1.0, 2.0, 3.0])
     unc = array([0.1, 0.1, 0.1])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     # Compute expected values using uncertainties module
     expected = uarray(val, unc) + 5.0
@@ -40,7 +40,7 @@ def test_add_int():
     """Test adding an int to MeasureResult. Validated against uncertainties module."""
     val = array([1.0, 2.0, 3.0])
     unc = array([0.1, 0.1, 0.1])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) + 5
     
@@ -54,7 +54,7 @@ def test_sub_float():
     """Test subtracting a float from MeasureResult. Validated against uncertainties module."""
     val = array([5.0, 6.0, 7.0])
     unc = array([0.1, 0.1, 0.1])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) - 2.0
     
@@ -68,7 +68,7 @@ def test_mul_float():
     """Test multiplying MeasureResult by float. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) * 2.5
     
@@ -82,7 +82,7 @@ def test_mul_negative_float():
     """Test multiplying by negative float. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) * (-2.5)
     
@@ -96,7 +96,7 @@ def test_rmul_float():
     """Test multiplying float by MeasureResult (reverse multiply). Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = 2.5 * uarray(val, unc)
     
@@ -110,7 +110,7 @@ def test_truediv_float():
     """Test dividing MeasureResult by float. Validated against uncertainties module."""
     val = array([10.0, 20.0, 30.0])
     unc = array([1.0, 2.0, 3.0])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) / 2.0
     
@@ -124,7 +124,7 @@ def test_rtruediv_float():
     """Test dividing float by MeasureResult (reverse divide). Validated against uncertainties module."""
     val = array([2.0, 4.0, 5.0])
     unc = array([0.1, 0.2, 0.25])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = 10.0 / uarray(val, unc)
     
@@ -138,7 +138,7 @@ def test_pow_float():
     """Test raising MeasureResult to a power. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) ** 2.0
     
@@ -152,7 +152,7 @@ def test_pow_zero():
     """Test raising MeasureResult to power 0."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     result = mr ** 0
     
@@ -164,7 +164,7 @@ def test_abs():
     """Test absolute value of MeasureResult."""
     val = array([-2.0, 3.0, -4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     result = abs(mr)
     
@@ -177,7 +177,7 @@ def test_mul_quantity():
     """Test multiplying MeasureResult by Quantity. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     q = Quantity(5.0, "s")
     # For Quantity multiplication, we use the Quantity value
@@ -193,7 +193,7 @@ def test_mul_quantity_negative():
     """Test multiplying by negative Quantity. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     q = Quantity(-5.0, "s")
     expected = uarray(val, unc) * q.value
@@ -208,7 +208,7 @@ def test_truediv_quantity():
     """Test dividing MeasureResult by Quantity. Validated against uncertainties module."""
     val = array([10.0, 20.0, 30.0])
     unc = array([1.0, 2.0, 3.0])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     q = Quantity(2.0, "s")
     expected = uarray(val, unc) / q.value
@@ -226,8 +226,8 @@ def test_add_measure_results():
     val2 = array([2.0, 3.0, 4.0])
     unc2 = array([0.2, 0.2, 0.2])
     
-    mr1 = MeasureResult(val1.copy(), unc1.copy(), unit="m")
-    mr2 = MeasureResult(val2.copy(), unc2.copy(), unit="m")
+    mr1 = MeasureResult(val=val1.copy(), unc=unc1.copy(), unit="m")
+    mr2 = MeasureResult(val=val2.copy(), unc=unc2.copy(), unit="m")
     
     expected = uarray(val1, unc1) + uarray(val2, unc2)
     
@@ -244,8 +244,8 @@ def test_sub_measure_results():
     val2 = array([2.0, 3.0, 4.0])
     unc2 = array([0.2, 0.2, 0.2])
     
-    mr1 = MeasureResult(val1.copy(), unc1.copy(), unit="m")
-    mr2 = MeasureResult(val2.copy(), unc2.copy(), unit="m")
+    mr1 = MeasureResult(val=val1.copy(), unc=unc1.copy(), unit="m")
+    mr2 = MeasureResult(val=val2.copy(), unc=unc2.copy(), unit="m")
     
     expected = uarray(val1, unc1) - uarray(val2, unc2)
     
@@ -262,8 +262,8 @@ def test_mul_measure_results():
     val2 = array([5.0, 6.0, 7.0])
     unc2 = array([0.5, 0.6, 0.7])
     
-    mr1 = MeasureResult(val1.copy(), unc1.copy(), unit="m")
-    mr2 = MeasureResult(val2.copy(), unc2.copy(), unit="s")
+    mr1 = MeasureResult(val=val1.copy(), unc=unc1.copy(), unit="m")
+    mr2 = MeasureResult(val=val2.copy(), unc=unc2.copy(), unit="s")
     
     expected = uarray(val1, unc1) * uarray(val2, unc2)
     
@@ -280,8 +280,8 @@ def test_truediv_measure_results():
     val2 = array([2.0, 4.0, 5.0])
     unc2 = array([0.1, 0.2, 0.25])
     
-    mr1 = MeasureResult(val1.copy(), unc1.copy(), unit="m")
-    mr2 = MeasureResult(val2.copy(), unc2.copy(), unit="s")
+    mr1 = MeasureResult(val=val1.copy(), unc=unc1.copy(), unit="m")
+    mr2 = MeasureResult(val=val2.copy(), unc=unc2.copy(), unit="s")
     
     expected = uarray(val1, unc1) / uarray(val2, unc2)
     
@@ -293,24 +293,24 @@ def test_truediv_measure_results():
 
 def test_mul_measure_results_unit_combination():
     """Test that multiplying creates correct unit combinations."""
-    mr1 = MeasureResult(array([2.0]), array([0.1]), unit="m")
-    mr2 = MeasureResult(array([3.0]), array([0.1]), unit="m")
+    mr1 = MeasureResult(val=array([2.0]), unc=array([0.1]), unit="m")
+    mr2 = MeasureResult(val=array([3.0]), unc=array([0.1]), unit="m")
     
     result = mr1 * mr2
     assert result.unit == Unit("m2")
 
 def test_truediv_measure_results_unit_division():
     """Test that dividing creates correct unit divisions."""
-    mr1 = MeasureResult(array([10.0]), array([1.0]), unit="m")
-    mr2 = MeasureResult(array([2.0]), array([0.1]), unit="m")
+    mr1 = MeasureResult(val=array([10.0]), unc=array([1.0]), unit="m")
+    mr2 = MeasureResult(val=array([2.0]), unc=array([0.1]), unit="m")
     
     result = mr1 / mr2
     assert result.unit == dimensionless_unscaled
 
 def test_unit_conversion_before_add():
     """Test adding MeasureResult with different but compatible units."""
-    mr1 = MeasureResult(array([1000.0]), array([10.0]), unit="mm")
-    mr2 = MeasureResult(array([1.0]), array([0.01]), unit="m")
+    mr1 = MeasureResult(val=array([1000.0]), unc=array([10.0]), unit="mm")
+    mr2 = MeasureResult(val=array([1.0]), unc=array([0.01]), unit="m")
     
     # Should convert mr2 to mm (1 m = 1000 mm)
     result = mr1 + mr2
@@ -322,7 +322,7 @@ def test_iadd_float():
     """Test in-place addition with float. Validated against uncertainties module."""
     val = array([1.0, 2.0, 3.0])
     unc = array([0.1, 0.1, 0.1])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) + 2.0
     
@@ -338,7 +338,7 @@ def test_isub_float():
     """Test in-place subtraction with float. Validated against uncertainties module."""
     val = array([5.0, 6.0, 7.0])
     unc = array([0.1, 0.1, 0.1])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) - 2.0
     
@@ -351,7 +351,7 @@ def test_imul_float():
     """Test in-place multiplication with float. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) * 2.0
     
@@ -364,7 +364,7 @@ def test_itruediv_float():
     """Test in-place division with float. Validated against uncertainties module."""
     val = array([10.0, 20.0, 30.0])
     unc = array([1.0, 2.0, 3.0])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) / 2.0
     
@@ -377,7 +377,7 @@ def test_add_float_frozen():
     """Test adding float to FrozenMeasureResult. Validated against uncertainties module."""
     val = array([1.0, 2.0, 3.0])
     unc = array([0.1, 0.1, 0.1])
-    fmr = FrozenMeasureResult(val.copy(), unc.copy(), unit="m")
+    fmr = FrozenMeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) + 5.0
     
@@ -392,7 +392,7 @@ def test_mul_quantity_frozen():
     """Test multiplying FrozenMeasureResult by Quantity. Validated against uncertainties module."""
     val = array([2.0, 3.0, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    fmr = FrozenMeasureResult(val.copy(), unc.copy(), unit="m")
+    fmr = FrozenMeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     q = Quantity(5.0, "s")
     expected = uarray(val, unc) * q.value
@@ -405,8 +405,8 @@ def test_mul_quantity_frozen():
 
 def test_mul_measure_results_frozen():
     """Test multiplying FrozenMeasureResult by MeasureResult. Validated against uncertainties module."""
-    fmr = FrozenMeasureResult(array([2.0, 3.0]), array([0.1, 0.2]), unit="m")
-    mr = MeasureResult(array([5.0, 6.0]), array([0.5, 0.6]), unit="s")
+    fmr = FrozenMeasureResult(val=array([2.0, 3.0]), unc=array([0.1, 0.2]), unit="m")
+    mr = MeasureResult(val=array([5.0, 6.0]), unc=array([0.5, 0.6]), unit="s")
     
     expected = uarray(array([2.0, 3.0]), array([0.1, 0.2])) * uarray(array([5.0, 6.0]), array([0.5, 0.6]))
     
@@ -420,7 +420,7 @@ def test_add_with_nan():
     """Test adding when some values are NaN."""
     val = array([1.0, nan, 3.0])
     unc = array([0.1, 0.1, 0.1])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     result = mr + 2.0
     
@@ -434,7 +434,7 @@ def test_mul_with_nan():
     """Test multiplying when some values are NaN."""
     val = array([2.0, nan, 4.0])
     unc = array([0.1, 0.2, 0.3])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     result = mr * 2.0
     
@@ -444,7 +444,7 @@ def test_mul_with_nan():
 
 def test_wavelength_squared_unit():
     """Test that squaring wavelength gives correct unit."""
-    mr = MeasureResult(array([100.0]), array([1.0]), unit="Angstrom")
+    mr = MeasureResult(val=array([100.0]), unc=array([1.0]), unit="Angstrom")
     result = mr ** 2
     assert result.unit == Unit("Angstrom2")
 
@@ -455,16 +455,16 @@ def test_flux_times_wavelength():
     val2 = array([6563.0])
     unc2 = array([10.0])
     
-    flux = MeasureResult(val1.copy(), unc1.copy(), unit="erg/(s*cm**2*Angstrom)")
-    wavelength = MeasureResult(val2.copy(), unc2.copy(), unit="Angstrom")
+    flux = MeasureResult(val=val1.copy(), unc=unc1.copy(), unit="erg/(s*cm**2*Angstrom)")
+    wavelength = MeasureResult(val=val2.copy(), unc=unc2.copy(), unit="Angstrom")
     
     strength = flux * wavelength
     assert strength.unit == Unit("erg/(s*cm**2)")
 
 def test_dimensionless_ratio():
     """Test creating a dimensionless ratio."""
-    a = MeasureResult(array([5.0]), array([0.1]), unit="m")
-    b = MeasureResult(array([2.0]), array([0.05]), unit="m")
+    a = MeasureResult(val=array([5.0]), unc=array([0.1]), unit="m")
+    b = MeasureResult(val=array([2.0]), unc=array([0.05]), unit="m")
     
     expected = uarray(array([5.0]), array([0.1])) / uarray(array([2.0]), array([0.05]))
     
@@ -477,8 +477,8 @@ def test_divide_by_zero_handling():
     """Test division by zero produces NaN/inf appropriately."""
     val = array([1.0, 2.0])
     unc = array([0.1, 0.2])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
-    divisor = MeasureResult(array([0.0, 0.0]), array([0.0, 0.0]), unit="s")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
+    divisor = MeasureResult(val=array([0.0, 0.0]), unc=array([0.0, 0.0]), unit="s")
     
     result = mr / divisor
     
@@ -489,7 +489,7 @@ def test_zero_uncertainty():
     """Test operations with zero uncertainty."""
     val = array([5.0, 10.0])
     unc = array([0.0, 0.0])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) * 3.0
     
@@ -502,7 +502,7 @@ def test_large_uncertainty():
     """Test operations with large uncertainties."""
     val = array([1.0, 2.0])
     unc = array([10.0, 20.0])
-    mr = MeasureResult(val.copy(), unc.copy(), unit="m")
+    mr = MeasureResult(val=val.copy(), unc=unc.copy(), unit="m")
     
     expected = uarray(val, unc) * 2.0
     

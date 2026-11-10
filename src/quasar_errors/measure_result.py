@@ -1,9 +1,19 @@
-from math import nan
-from typing import Any, ClassVar, Literal, Self
+import math
+from collections.abc import Callable
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    Self,
+    TypeVar,
+    final,
+    overload,
+)
 
 import numpy as np
 from astropy.constants import c
 from astropy.units import Quantity, Unit, dimensionless_unscaled
+from numpy.typing import DTypeLike
 from pydantic import (
     BaseModel,
     field_validator,
@@ -13,11 +23,35 @@ from pydantic import (
 from quasar_typing.astropy import CompositeUnitType, UnitType
 from quasar_typing.numpy import BoolVector, FloatVector
 
+F = TypeVar("F", bound=Callable)
+
+@overload
+def assert_is_not_logarithmic(func: None) -> Callable[[F], F]: ...
+
+@overload
+def assert_is_not_logarithmic[F](func: F) -> F: ...
+
+@final
+def assert_is_not_logarithmic[F](
+    func: F | None,
+) -> F | Callable[[F], F]:
+    def wrapper(f: F) -> F:
+        def inner(self, *args, **kwargs):
+            if self.log_base is not None:
+                raise ValueError(
+                    f"Cannot call `{f.__name__}` on a logarithmic quantity."
+                )
+            return f(self, *args, **kwargs)
+        return inner
+    return wrapper if func is None else wrapper(func)
+
+###
 
 class _MeasureResult(BaseModel):
     val: FloatVector
     unc: FloatVector
     unit: UnitType | CompositeUnitType = dimensionless_unscaled
+    log_base: float | None = None
 
     frozen: ClassVar[bool]
 
@@ -35,7 +69,7 @@ class _MeasureResult(BaseModel):
         if isinstance(values, dict) and all(
             k in values for k in ("val", "unc")
         ):
-            f = lambda val: nan if val is None else float(val)
+            f = lambda val: math.nan if val is None else float(val)
             values["val"] = np.fromiter(map(f, values["val"]), np.float64)
             values["unc"] = np.fromiter(map(f, values["unc"]), np.float64)
         return values
@@ -64,6 +98,7 @@ class _MeasureResult(BaseModel):
             "val": self.val,
             "unc": self.unc,
             "unit": self.unit,
+            "log_base": self.log_base,
             "frozen": self.frozen,
         }
     
@@ -73,9 +108,10 @@ class _MeasureResult(BaseModel):
         """Serialize the model, including the 'frozen' attribute."""
         mask = np.isfinite(self.val) & np.isfinite(self.unc)
         return {
-            "val": [f"{v:e}" if m else None for v, m in zip(self.val, mask)],
-            "unc": [f"{u:e}" if m else None for u, m in zip(self.unc, mask)],
+            "val": [v if m else None for v, m in zip(self.val, mask)],
+            "unc": [u if m else None for u, m in zip(self.unc, mask)],
             "unit": str(self.unit),
+            "log_base": self.log_base,
             "frozen": self.frozen,
         }
 
@@ -139,9 +175,23 @@ class _MeasureResult(BaseModel):
     def to_tuple(self) -> tuple[FloatVector, FloatVector]:
         return (self.val, self.unc)
 
+    ### Copy
+
+    @overload
+    def copy(self, freeze: Literal[True]) -> "FrozenMeasureResult": ...
+    
+    @overload
+    def copy(self, freeze: Literal[False] = False) -> "MeasureResult": ...
+
+    @final
     def copy(self, freeze: bool = False) -> "FrozenMeasureResult | MeasureResult":
         cls = FrozenMeasureResult if freeze else MeasureResult
-        return cls(val=self.val.copy(), unc=self.unc.copy(), unit=self.unit)
+        return cls(
+            val=self.val.copy(), 
+            unc=self.unc.copy(), 
+            unit=self.unit,
+            log_base=self.log_base,
+        )
 
     def freeze(self) -> "FrozenMeasureResult":
         return self if self.frozen else self.copy(freeze=True)
@@ -149,10 +199,28 @@ class _MeasureResult(BaseModel):
     def unfreeze(self) -> "MeasureResult":
         return self.copy(freeze=False)
 
+    ### Data types
+
+    def astype(self, dtype: DTypeLike) -> Self:
+        return self.model_validate({
+            "val": self.val.astype(dtype),
+            "unc": self.unc.astype(dtype),
+            "unit": self.unit,
+            "log_base": self.log_base,
+        })
+
+    @property
+    def dtype(self) -> DTypeLike:
+        return self.val.dtype
+
+    ### Units
+
+    @assert_is_not_logarithmic
     def _set_unit(self, unit: UnitType | CompositeUnitType | Any) -> None:
         """Forcefully modify the 'unit' attribute."""
         object.__setattr__(self, "unit", Unit(unit))
 
+    @assert_is_not_logarithmic
     def to(self, unit: UnitType | CompositeUnitType | Any) -> Self:
         unit = Unit(unit)
         factor = (1.0 * self.unit).to(unit).value
@@ -162,12 +230,56 @@ class _MeasureResult(BaseModel):
             "unit": unit,
         })
 
+    @assert_is_not_logarithmic
     def to_c(self) -> Self:
         """Convert a unitless MeasureResult ratio to a velocity in km/s."""
         out: MeasureResult = self.to(1) * c.to("km/s").value
         out._set_unit("km/s")
         return out.freeze() if isinstance(self, FrozenMeasureResult) else out
+
+    ### Logarithmic Operations
+
+    def log(self, base: float = math.e) -> Self:
+        """
+        Create a logarithmic version of this MeasureResult with the specified 
+        base.
+        """
+        if self.log_base is None:
+            val = np.log(self.val) / math.log(base)
+            unc = self.unc / self.val / math.log(base)
+        else:
+            val = self.val * math.log(self.log_base) / math.log(base)
+            unc = self.unc * math.log(self.log_base) / math.log(base)
+
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": self.unit,
+            "log_base": base,
+        })
+
+    def unlog(self) -> Self:
+        """
+        Convert a logarithmic MeasureResult back to its linear form. 
         
+        If the MeasureResult is not logarithmic, it is returned as is.
+        """
+        if self.log_base is None:
+            return self
+
+        val = np.exp(self.val * math.log(self.log_base))
+        unc = self.unc * val * math.log(self.log_base)
+
+        return self.model_validate({
+            "unc": unc,
+            "val": val,
+            "unit": self.unit,
+            "log_base": None
+        })
+
+    ### Mathematical operations
+
+    @assert_is_not_logarithmic
     def __add__(self, num: float | Quantity | Self) -> Self:
         """
         Add a number or another MeasureResult to this MeasureResult. The unit of 
@@ -196,6 +308,7 @@ class _MeasureResult(BaseModel):
             "unit": self.unit,
         })
 
+    @assert_is_not_logarithmic
     def __sub__(self, num: float | Quantity | Self) -> Self:
         """
         Subtraction.
@@ -222,7 +335,8 @@ class _MeasureResult(BaseModel):
             "unc": unc,
             "unit": self.unit,
         })
-    
+
+    @assert_is_not_logarithmic
     def __mul__(self, num: float | Quantity | Self) -> Self:
         """
         Multiplication.
@@ -254,9 +368,11 @@ class _MeasureResult(BaseModel):
             "unit": unit,
         })
 
+    @assert_is_not_logarithmic
     def __rmul__(self, num: float | Quantity | Self) -> Self:
         return self * num
 
+    @assert_is_not_logarithmic
     def __truediv__(self, num: float | Quantity | Self) -> Self:
         if isinstance(num, (float, int, Quantity)):
             return self * (1 / num)
@@ -278,6 +394,7 @@ class _MeasureResult(BaseModel):
             "unit": unit,
         })
 
+    @assert_is_not_logarithmic
     def __rtruediv__(self, num: float | Quantity | Self) -> Self:
         if isinstance(num, (float, int, Quantity)):
             return num * (self ** -1)
@@ -299,6 +416,7 @@ class _MeasureResult(BaseModel):
             "unit": unit,
         })
 
+    @assert_is_not_logarithmic
     def __pow__(self, num: float) -> Self:
         val = np.full(self.val.size, np.nan, dtype=np.float64)
         unc = np.full(self.unc.size, 0.0, dtype=np.float64)
@@ -319,6 +437,7 @@ class _MeasureResult(BaseModel):
             "unit": unit,
         })
 
+    @assert_is_not_logarithmic
     def __abs__(self) -> Self:
         val = np.full(self.val.size, np.nan, dtype=np.float64)
         mask = np.isfinite(self.val)
@@ -335,6 +454,7 @@ class FrozenMeasureResult(_MeasureResult, frozen=True):
 class MeasureResult(_MeasureResult):
     frozen: ClassVar[Literal[False]] = False
 
+    @assert_is_not_logarithmic
     def update(
         self,
         new_values: Self,
@@ -351,6 +471,7 @@ class MeasureResult(_MeasureResult):
         self.val[index] = new_values.val[index]
         self.unc[index] = new_values.unc[index]
 
+    @assert_is_not_logarithmic
     def update_with_single_values(
         self,
         new_values: list[float],
@@ -372,6 +493,7 @@ class MeasureResult(_MeasureResult):
         self.val[index] = new_values
         self.unc[index] = 0
 
+    @assert_is_not_logarithmic
     def update_with_list_of_tuples(
         self,
         new_values: list[tuple[float, float]],
@@ -393,6 +515,7 @@ class MeasureResult(_MeasureResult):
         self.val[index] = [tup[0] for tup in new_values]
         self.unc[index] = [tup[1] for tup in new_values]
 
+    @assert_is_not_logarithmic
     def remove_negatives(self) -> None:
         is_negative = self.val < 0
         self.val[is_negative] = 0
@@ -400,6 +523,7 @@ class MeasureResult(_MeasureResult):
 
     ### Arithmetic
 
+    @assert_is_not_logarithmic
     def __iadd__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace addition.
@@ -409,6 +533,7 @@ class MeasureResult(_MeasureResult):
         self.unc[:] = temp.unc
         return self
 
+    @assert_is_not_logarithmic
     def __isub__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace subtraction.
@@ -418,6 +543,7 @@ class MeasureResult(_MeasureResult):
         self.unc[:] = temp.unc
         return self
 
+    @assert_is_not_logarithmic
     def __imul__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace multiplication.
@@ -427,6 +553,7 @@ class MeasureResult(_MeasureResult):
         self.unc[:] = temp.unc
         return self
 
+    @assert_is_not_logarithmic
     def __itruediv__(self, other: float | Quantity | Self) -> Self:
         """
         Inplace true division.
@@ -436,6 +563,7 @@ class MeasureResult(_MeasureResult):
         self.unc[:] = temp.unc
         return self
 
+    @assert_is_not_logarithmic
     def __ipow__(self, other: float) -> Self:
         temp = self ** other
         self.val[:] = temp.val

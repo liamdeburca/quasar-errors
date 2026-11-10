@@ -28,6 +28,14 @@ class PAQSContinuumOutput(MeasureResultDict):
             for k, v in value.items()
         }
 
+    @field_validator("results")
+    @classmethod
+    def ensure_luminosities_are_log10(
+        cls,
+        value: dict[str, FrozenMeasureResult | None],
+    ) -> dict[str, FrozenMeasureResult | None]:
+        return {k: v.log(10) for k, v in value.items()}
+
     @classmethod
     def _fromAnalyser(
         cls, 
@@ -49,10 +57,11 @@ class PAQSContinuumOutput(MeasureResultDict):
         }.items():
             lb, ub = analyser.info.units.getWavelength(w_bounds * Unit("angstrom"))
             if (my_lb <= lb) and (ub <= my_ub):
-                results[key] = analyser.measureAverageFlux(
+                result = analyser.measureAverageFlux(
                     (lb, ub),
                     from_model=from_model,
                 ) * distance_modulus
+                results[key] = result
         
         return {"results": results}
 
@@ -98,6 +107,16 @@ class PAQSLineOutput(MeasureResultDict):
                 "FWHM": "km/s",
                 "EW": "angstrom",
             }[k])
+        return value
+
+    @field_validator("results")
+    @classmethod
+    def ensure_fluxs_are_log10(
+        cls,
+        value: dict[str, FrozenMeasureResult],
+    ) -> dict[str, FrozenMeasureResult]:
+        if "FLUX_OBS" in value:
+            value["FLUX_OBS"] = value["FLUX_OBS"].log(10)
         return value
 
     @classmethod
