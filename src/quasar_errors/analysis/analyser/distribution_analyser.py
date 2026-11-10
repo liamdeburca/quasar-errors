@@ -3,7 +3,8 @@ from pydantic.dataclasses import dataclass
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
 
-from ..measure_result import FrozenMeasureResult
+from quasar_errors.measure_result import FrozenMeasureResult
+
 from .base_analyser import _BaseAnalyser
 
 

@@ -1,8 +1,7 @@
-from dataclasses import field
 from typing import Optional, Self
 
 import numpy as np
-import pydantic
+from pydantic.dataclasses import Field, dataclass
 from quasar_models.modeling import Fitter, PrepareModel, SequentialModel
 from quasar_typing.astropy import ModelType
 from quasar_typing.numpy import (
@@ -16,29 +15,29 @@ from quasar_utils.setup import FitterKwargs
 from quasar_errors.model_samples import Sample
 
 
-@pydantic.dataclasses.dataclass
+@dataclass
 class MappedFunc:
     x: FittableFloatVector
     dy: FloatVector
     dx: FloatVector
     y_bg: FloatVector
 
-    variant: str = field(default="spectrum", kw_only=True)
-    model: Optional[ModelType] = field(default=None, kw_only=True)
-    is_logbinned: bool | None = field(default=None, kw_only=True)
+    variant: str = Field(default="spectrum", kw_only=True)
+    model: Optional[ModelType] = Field(default=None, kw_only=True)
+    is_logbinned: bool | None = Field(default=None, kw_only=True)
     
-    eval_mask: BoolVector | None = field(default=None, kw_only=True)
-    comp_mask: BoolVector | None = field(default=None, kw_only=True)
-    kernels: FloatMatrix | None = field(default=None, kw_only=True)
+    eval_mask: BoolVector | None = Field(default=None, kw_only=True)
+    comp_mask: BoolVector | None = Field(default=None, kw_only=True)
+    kernels: FloatMatrix | None = Field(default=None, kw_only=True)
 
-    fitter_kwargs: FitterKwargs | None = field(default=None, kw_only=True)
+    fitter_kwargs: FitterKwargs | None = Field(default=None, kw_only=True)
 
-    _preparer: PrepareModel | None = field(default=None, kw_only=True)
-    _seq_model: SequentialModel | None = field(default=None, kw_only=True)
-    _where: BoolVector | None = field(default=None, kw_only=True)
-    _model_is_prepared: bool = field(default=False, kw_only=True)
-    _weights: FittableFloatVector | None = field(default=None, kw_only=True)
-    _fitter: Fitter | None = field(default=None, kw_only=True)
+    _preparer: PrepareModel | None = Field(default=None, kw_only=True)
+    _seq_model: SequentialModel | None = Field(default=None, kw_only=True)
+    _where: BoolVector | None = Field(default=None, kw_only=True)
+    _model_is_prepared: bool = Field(default=False, kw_only=True)
+    _weights: FittableFloatVector | None = Field(default=None, kw_only=True)
+    _fitter: Fitter | None = Field(default=None, kw_only=True)
 
     def __post_init__(self):
         if self.x.ndim != 1:
@@ -114,24 +113,21 @@ class MappedFunc:
         args = (self.x[mask], _y[mask], self.dy[mask], self.dx[mask])
         
         if self.variant == "spectrum":
-            return Sample.fromSpectrumSample.__wrapped__(
-                Sample,
+            kwargs = Sample._fromSpectrumSample(*args, weight=1.0)
+        else:
+            self._fitter(
+                self._seq_model, 
+                self.x, 
+                _y,
+                weights=self._weights,
+                where=self._where,
+                **(self.fitter_kwargs or {}),
+            )
+            kwargs = Sample._fromParamVector(
                 *args,
+                self._fitter.sol, 
+                self._seq_model,
                 weight=1.0,
             )
-        
-        self._fitter(
-            self._seq_model, 
-            self.x, 
-            _y,
-            weights=self._weights,
-            where=self._where,
-            **(self.fitter_kwargs or {}),
-        )
-        return Sample.fromParamVector(
-            *args,
-            self._fitter.sol, 
-            self._seq_model,
-            weight=1.0,
-        )
+        return Sample(**kwargs)
     

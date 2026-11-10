@@ -1,8 +1,9 @@
 __all__ = ["nth_moment"]
 
+from numpy import full_like
 from quasar_typing.numpy import FloatMatrix, FloatVector
 
-from .measure_result import MeasureResult
+from quasar_errors.measure_result import MeasureResult
 
 
 def _total(
@@ -287,7 +288,11 @@ def total(
         dys = dys[None, :]
     if dxs.ndim == 1:
         dxs = dxs[None, :]
-    return MeasureResult(*_total(ys, dxs, dys))
+    
+    val, unc = _total(ys, dxs, dys)
+    if unc.shape[0] == 1:
+        unc = full_like(val, unc[0])
+    return MeasureResult(val=val, unc=unc)
 
 
 def nth_moment(
@@ -305,14 +310,14 @@ def nth_moment(
         dys = dys[None, :]
     if dxs.ndim == 1:
         dxs = dxs[None, :]
-    return MeasureResult(
-        *_nth_moment(
-            n,
-            xs, ys,
-            dxs, dys,
-            tot=tot if (tot is None) else tot.to_tuple(),
-        )
+
+    val, unc = _nth_moment(
+        n,
+        xs, ys,
+        dxs, dys,
+        tot=tot if (tot is None) else tot.to_tuple(),
     )
+    return MeasureResult(val=val, unc=unc)
 
 
 def nth_central_moment(
@@ -331,17 +336,16 @@ def nth_central_moment(
         dys = dys[None, :]
     if dxs.ndim == 1:
         dxs = dxs[None, :]
-    return MeasureResult(
-        *_nth_central_moment(
-            n,
-            xs,
-            ys,
-            dxs,
-            dys,
-            tot=tot if (tot is None) else tot.to_tuple(),
-            m1=m1 if (m1 is None) else m1.to_tuple(),
-        )
+    val, unc = _nth_central_moment(
+        n,
+        xs,
+        ys,
+        dxs,
+        dys,
+        tot=tot if (tot is None) else tot.to_tuple(),
+        m1=m1 if (m1 is None) else m1.to_tuple(),
     )
+    return MeasureResult(val=val, unc=unc)
 
 
 def dispersion(
@@ -360,17 +364,16 @@ def dispersion(
         dys = dys[None, :]
     if dxs.ndim == 1:
         dxs = dxs[None, :]
-    return MeasureResult(
-        *_dispersion(
-            xs,
-            ys,
-            dxs,
-            dys,
-            tot=tot if (tot is None) else tot.to_tuple(),
-            m1=m1 if (m1 is None) else m1.to_tuple(),
-            cm2=cm2 if (cm2 is None) else cm2.to_tuple(),
-        )
+    val, unc = _dispersion(
+        xs,
+        ys,
+        dxs,
+        dys,
+        tot=tot if (tot is None) else tot.to_tuple(),
+        m1=m1 if (m1 is None) else m1.to_tuple(),
+        cm2=cm2 if (cm2 is None) else cm2.to_tuple(),
     )
+    return MeasureResult(val=val, unc=unc)
 
 
 def skewness(
@@ -400,8 +403,7 @@ def skewness(
         cm2=cm2 if (cm2 is None) else cm2.to_tuple(),
         cm3=cm3 if (cm3 is None) else cm3.to_tuple(),
     )
-    print(val.shape, unc.shape)
-    return MeasureResult(val, unc=unc)
+    return MeasureResult(val=val, unc=unc)
 
 
 def kurtosis(
@@ -422,16 +424,15 @@ def kurtosis(
         dys = dys[None, :]
     if dxs.ndim == 1:
         dxs = dxs[None, :]
-    return MeasureResult(
-        *_kurtosis(
-            xs,
-            ys,
-            dxs,
-            dys,
-            tot=tot if (tot is None) else tot.to_tuple(),
-            m1=m1 if (m1 is None) else m1.to_tuple(),
-            cm2=cm2 if (cm2 is None) else cm2.to_tuple(),
-            cm3=cm3 if (cm3 is None) else cm3.to_tuple(),
-            cm4=cm4 if (cm4 is None) else cm4.to_tuple(),
-        )
+    val, unc = _kurtosis(
+        xs,
+        ys,
+        dxs,
+        dys,
+        tot=tot if (tot is None) else tot.to_tuple(),
+        m1=m1 if (m1 is None) else m1.to_tuple(),
+        cm2=cm2 if (cm2 is None) else cm2.to_tuple(),
+        cm3=cm3 if (cm3 is None) else cm3.to_tuple(),
+        cm4=cm4 if (cm4 is None) else cm4.to_tuple(),
     )
+    return MeasureResult(val=val, unc=unc)

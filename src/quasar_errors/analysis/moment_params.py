@@ -5,7 +5,7 @@ from typing import Literal
 from quasar_typing.numpy import BoolMatrix, FloatMatrix
 from quasar_typing.string_selections import BackgroundFlux
 
-from .measure_result import FrozenMeasureResult
+from quasar_errors.measure_result import FrozenMeasureResult
 
 
 @dataclass(frozen=True)

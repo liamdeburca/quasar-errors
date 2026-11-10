@@ -8,16 +8,18 @@ from astropy.units import Unit
 from pydantic import validate_call
 from pydantic.dataclasses import Field, dataclass
 from quasar_typing.astropy import CompositeUnitType, UnitType
-from quasar_typing.literals import FWHMStrategy
+from quasar_typing.literals import FWHMStrategy, ModelName
 from quasar_typing.multiprocessing import PoolType
 from quasar_typing.numpy import BoolMatrix, FloatMatrix, FloatVector
+from quasar_typing.re import StrPattern
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
+from quasar_utils.loading.metadata import BaseMeta
 from quasar_utils.setup import Info
 
 from quasar_errors.error_result import ErrorResult
+from quasar_errors.measure_result import MeasureResult
 
-from ..measure_result import MeasureResult
 from ..moment_params import MomentParams
 
 
@@ -59,6 +61,7 @@ class _BaseAnalyser:
     `pydantic.validate_call`.
     """
     error_result: ErrorResult
+    meta: BaseMeta
 
     pool: PoolType | None = Field(default=None, kw_only=True)
     info: Info = Field(default_factory=Info, kw_only=True)
@@ -94,10 +97,11 @@ class _BaseAnalyser:
     def create(
         cls, 
         error_result: ErrorResult,
+        meta: BaseMeta,
         *,
-        target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
+        target_pattern: StrPattern | tuple[StrPattern, ...] | Callable[[StrPattern], bool] | None = None,
         target_wave: float | set[float] | None = None,
-        target_line: str | set[str] | None = None,
+        target_line: ModelName | set[ModelName] | None = None,
         pool: PoolType | None = None,
         info: Info | None = None,
         res: int | None = None,
@@ -107,14 +111,15 @@ class _BaseAnalyser:
         ipv_int: float | None = None,
         dx_int: float | None = None,
     ) -> Self:
-        er = error_result.isolate.__wrapped__(
-            error_result,
-            target_pattern=target_pattern,
-            target_wave=target_wave,
-            target_line=target_line,
-        )
-        return cls(
-            er,
+        if any([target_pattern, target_wave, target_line]):
+            error_result = error_result._isolate(
+                target_pattern=target_pattern,
+                target_wave=target_wave,
+                target_line=target_line,
+            )
+            
+        analyser = cls(
+            error_result, meta,
             pool=pool,
             info=info or Info(),
             res=res,
@@ -124,17 +129,11 @@ class _BaseAnalyser:
             ipv_int=ipv_int,
             dx_int=dx_int,
         )
+        analyser._set_lines_and_waves()
+        analyser._set_hyperparams()
+        analyser._set_data()
 
-    def __post_init__(self) -> None:
-        """
-        Runs the following:
-        - `_set_lines_and_waves`
-        - `_set_hyperparams`
-        - `_set_data`
-        """
-        self._set_lines_and_waves()
-        self._set_hyperparams()
-        self._set_data()
+        return analyser
 
     def _set_lines_and_waves(self) -> None:
         if self.error_result[0].em is None:
@@ -188,6 +187,7 @@ class _BaseAnalyser:
         """Create a tuple of the current Analyser instance."""
         return (
             id(self.error_result), # ErrorResult instance is always frozen
+            self.meta,
             self.res, 
             self.render_width,
             self.fwhm_strategy, 
@@ -206,6 +206,18 @@ class _BaseAnalyser:
             self.n_pix,
             self.mask_correction,
         )
+
+    ### Metadata
+
+    @property
+    def z(self) -> float:
+        return self.meta.z
+
+    @property
+    def luminosity_distance_mpc(self) -> float:
+        return self.meta.luminosity_distance_mpc
+
+    ###
 
     @property
     def map(self) -> Callable[[Callable, Iterable], Iterator]:
@@ -231,7 +243,7 @@ class _BaseAnalyser:
             return self.error_result[0].pl(self.x)[None,:]
         return np.array(
             [s.pl(self.x) for s in self.error_result.samples], 
-            np.float64
+            np.float64,
         )
 
     @cached_property
@@ -248,7 +260,7 @@ class _BaseAnalyser:
             return self.error_result[0].fe(self.x)[None,:]
         return np.array(
             [s.fe(self.x) for s in self.error_result.samples], 
-            np.float64
+            np.float64,
         )
 
     @cached_property
@@ -282,7 +294,7 @@ class _BaseAnalyser:
             return self.error_result[0].hg(self.x)[None,:]
         return np.array(
             [s.hg(self.x) for s in self.error_result.samples], 
-            np.float64
+            np.float64,
         )
 
     @cached_property
@@ -299,7 +311,7 @@ class _BaseAnalyser:
             return self.error_result[0].em(self.x)[None,:]
         return np.array(
             [s.em(self.x) for s in self.error_result.samples], 
-            np.float64
+            np.float64,
         )
 
     @cached_property
@@ -308,10 +320,7 @@ class _BaseAnalyser:
         Returns a 2d array of all flux densities for each sample. 
         """
         if self.n_samples > 1 and all(
-            np.array_equal(
-                self.error_result[0].y, 
-                self.error_result[i].y,
-            ) 
+            np.array_equal(self.error_result[0].y, self.error_result[i].y) 
             for i in range(1, self.n_samples)
         ):
             return self.error_result[0].y[None,:]

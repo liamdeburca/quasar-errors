@@ -6,7 +6,7 @@ __all__ = [
 from numba import njit
 from numpy import append, float64, full, invert, searchsorted, zeros
 from quasar_typing.numpy import FloatVector
-from quasar_utils.binning import alpha_matrix_sparse
+from quasar_utils.binning import _alpha_matrix_sparse
 
 
 @njit(fastmath=True)
@@ -73,11 +73,11 @@ def mirror_and_rebin(
 
     new_vals = zeros(new_edges.size - 1, dtype=float64)
 
-    a_l = alpha_matrix_sparse.__wrapped__(edges_l, new_edges)
+    a_l = _alpha_matrix_sparse(edges_l, new_edges)
     if a_l.sum() > 0:
         new_vals += a_l.dot(vals_l) / a_l.sum()
 
-    a_r = alpha_matrix_sparse.__wrapped__(edges_r, new_edges)
+    a_r = _alpha_matrix_sparse(edges_r, new_edges)
     if a_r.sum() > 0:
         new_vals += a_r.dot(vals_r) / a_r.sum()
 

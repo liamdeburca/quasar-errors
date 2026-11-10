@@ -9,6 +9,7 @@ import pytest
 from quasar_models import GaussianModel, PowerLawModel
 from quasar_models.modeling import PrepareModel
 from quasar_typing.numpy import FloatMatrix, FloatVector, SortedFloatVector
+from quasar_utils.loading import SDSSMeta
 from quasar_utils.setup import Info
 from scipy.stats import gaussian_kde, norm
 
@@ -182,7 +183,10 @@ def samples(
         with preparer:
             out.append(
                 Sample(
-                    x_array, y, dy_array, dx_array,
+                    x=x_array, 
+                    y=y, 
+                    dy=dy_array, 
+                    dx=dx_array,
                     pl=PowerLawSample.fromPowerLawModel(pl_model),
                     em=GaussianSampleList.fromGaussianSubmodels([em_model])
                 )
@@ -209,9 +213,28 @@ def error_result(
 
 
 @pytest.fixture(scope="session")
-def analyser(error_result: ErrorResult, info: Info) -> Analyser:
-    return Analyser(
+def sdss_meta() -> Generator[SDSSMeta, None, None]:
+    p = _this_file.parent / "temp_sdss_spectrum.fits"
+    p.touch()
+    yield SDSSMeta(
+        path=p,
+        title="sdss_meta",
+        ra=0.0,
+        dec=0.0,
+        z=0.0,
+        luminosity_distance_mpc=0.0,
+        plate=1,
+        fiber=1,
+        mjd=1,
+    )
+    p.unlink()
+
+
+@pytest.fixture(scope="session")
+def analyser(error_result: ErrorResult, info: Info, sdss_meta: SDSSMeta) -> Analyser:
+    return Analyser.create(
         error_result,
+        sdss_meta,
         info=info,
         fwhm_strategy="average",
         v_int=0,

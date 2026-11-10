@@ -1,24 +1,85 @@
-from abc import ABC, abstractmethod
-from typing import Any, Self
+from math import nan
+from typing import Any, ClassVar, Literal, Self
 
 import numpy as np
-import pydantic
 from astropy.constants import c
 from astropy.units import Quantity, Unit, dimensionless_unscaled
+from pydantic import (
+    BaseModel,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 from quasar_typing.astropy import CompositeUnitType, UnitType
 from quasar_typing.numpy import BoolVector, FloatVector
 
 
-class _MeasureResult(ABC):
-    @abstractmethod
-    def __init__(
-        self, 
-        val: FloatVector, 
-        unc: FloatVector, 
-        unit: UnitType | CompositeUnitType = dimensionless_unscaled,
-    ) -> None:
-        ...
+class _MeasureResult(BaseModel):
+    val: FloatVector
+    unc: FloatVector
+    unit: UnitType | CompositeUnitType = dimensionless_unscaled
 
+    frozen: ClassVar[bool]
+
+    @model_validator(mode="before")
+    def remove_frozen_from_dict_input(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            if "frozen" in values:
+                assert cls.frozen == values["frozen"]
+            return {k: v for k, v in values.items() if k != "frozen"}
+        return values
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_serialized_data(cls, values: Any) -> Any:
+        if isinstance(values, dict) and all(
+            k in values for k in ("val", "unc")
+        ):
+            f = lambda val: nan if val is None else float(val)
+            values["val"] = np.fromiter(map(f, values["val"]), np.float64)
+            values["unc"] = np.fromiter(map(f, values["unc"]), np.float64)
+        return values
+    
+    @model_validator(mode="after")
+    def check_array_lengths(self) -> Self:
+        if self.val.size != self.unc.size:
+            raise ValueError(
+                f"`val` {self.val.shape} and `unc` {self.unc.shape} "
+                "must have the same length"
+            )
+        return self
+
+
+    @field_validator("val", "unc", mode="after")
+    @classmethod
+    def ensure_readonly_if_frozen(cls, v: FloatVector) -> FloatVector:
+        v.flags.writeable = not getattr(cls, "frozen", False)
+        return v
+
+
+    @model_serializer(when_used="python")
+    def serialize_model_to_python(self) -> dict[str, Any]:
+        """Serialize the model, including the 'frozen' attribute."""
+        return {
+            "val": self.val,
+            "unc": self.unc,
+            "unit": self.unit,
+            "frozen": self.frozen,
+        }
+    
+
+    @model_serializer(when_used="json")
+    def serialize_model_to_json(self) -> dict[str, Any]:
+        """Serialize the model, including the 'frozen' attribute."""
+        mask = np.isfinite(self.val) & np.isfinite(self.unc)
+        return {
+            "val": [f"{v:e}" if m else None for v, m in zip(self.val, mask)],
+            "unc": [f"{u:e}" if m else None for u, m in zip(self.unc, mask)],
+            "unit": str(self.unit),
+            "frozen": self.frozen,
+        }
+
+    ###
 
     def __repr__(self) -> str:
         s = f"{self.__class__.__name__}("
@@ -39,9 +100,9 @@ class _MeasureResult(ABC):
             unit = dimensionless_unscaled
 
         return cls(
-            np.full(length, np.nan, dtype=np.float64),
-            np.full(length, 0.0, dtype=np.float64),
-            unit = Unit(unit)
+            val=np.full(length, np.nan, dtype=np.float64),
+            unc=np.full(length, 0.0, dtype=np.float64),
+            unit=Unit(unit),
         )
         
     @classmethod
@@ -73,19 +134,17 @@ class _MeasureResult(ABC):
                 count=length,
             )
 
-        return cls(val, unc, unit=Unit(unit))
+        return cls(val=val, unc=unc, unit=Unit(unit))
 
     def to_tuple(self) -> tuple[FloatVector, FloatVector]:
         return (self.val, self.unc)
 
     def copy(self, freeze: bool = False) -> "FrozenMeasureResult | MeasureResult":
         cls = FrozenMeasureResult if freeze else MeasureResult
-        return cls(self.val.copy(), self.unc.copy(), unit=self.unit)
+        return cls(val=self.val.copy(), unc=self.unc.copy(), unit=self.unit)
 
     def freeze(self) -> "FrozenMeasureResult":
-        if isinstance(self, FrozenMeasureResult):
-            return self
-        return self.copy(freeze=True)
+        return self if self.frozen else self.copy(freeze=True)
 
     def unfreeze(self) -> "MeasureResult":
         return self.copy(freeze=False)
@@ -97,15 +156,14 @@ class _MeasureResult(ABC):
     def to(self, unit: UnitType | CompositeUnitType | Any) -> Self:
         unit = Unit(unit)
         factor = (1.0 * self.unit).to(unit).value
-        return self.__class__(
-            self.val * factor,
-            self.unc * abs(factor),
-            unit=unit,
-        )
+        return self.model_validate({
+            "val": self.val * factor,
+            "unc": self.unc * abs(factor),
+            "unit": unit,
+        })
 
     def to_c(self) -> Self:
         """Convert a unitless MeasureResult ratio to a velocity in km/s."""
-        out = self.to(1)
         out: MeasureResult = self.to(1) * c.to("km/s").value
         out._set_unit("km/s")
         return out.freeze() if isinstance(self, FrozenMeasureResult) else out
@@ -132,7 +190,11 @@ class _MeasureResult(ABC):
             val[mask] = self.val[mask] + num.val[mask]
             unc[mask] = np.hypot(self.unc[mask], num.unc[mask])
 
-        return self.__class__(val, unc, unit=self.unit)  
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": self.unit,
+        })
 
     def __sub__(self, num: float | Quantity | Self) -> Self:
         """
@@ -155,7 +217,11 @@ class _MeasureResult(ABC):
             val[mask] = self.val[mask] - num.val[mask]
             unc[mask] = np.hypot(self.unc[mask], num.unc[mask])
 
-        return self.__class__(val, unc, unit=self.unit)
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": self.unit,
+        })
     
     def __mul__(self, num: float | Quantity | Self) -> Self:
         """
@@ -182,7 +248,11 @@ class _MeasureResult(ABC):
             )
             unit = self.unit * num.unit
 
-        return self.__class__(val, unc, unit=unit)
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": unit,
+        })
 
     def __rmul__(self, num: float | Quantity | Self) -> Self:
         return self * num
@@ -202,7 +272,11 @@ class _MeasureResult(ABC):
         )
         unit = self.unit / num.unit
 
-        return self.__class__(val, unc, unit=unit)
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": unit,
+        })
 
     def __rtruediv__(self, num: float | Quantity | Self) -> Self:
         if isinstance(num, (float, int, Quantity)):
@@ -219,7 +293,11 @@ class _MeasureResult(ABC):
         )
         unit = num.unit / self.unit
 
-        return self.__class__(val, unc, unit=unit)
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": unit,
+        })
 
     def __pow__(self, num: float) -> Self:
         val = np.full(self.val.size, np.nan, dtype=np.float64)
@@ -235,25 +313,27 @@ class _MeasureResult(ABC):
             unc[mask] = abs(num * self.val[mask] ** (num - 1) * self.unc[mask])
             unit = self.unit ** num
 
-        return self.__class__(val, unc, unit=unit)
+        return self.model_validate({
+            "val": val,
+            "unc": unc,
+            "unit": unit,
+        })
 
     def __abs__(self) -> Self:
         val = np.full(self.val.size, np.nan, dtype=np.float64)
         mask = np.isfinite(self.val)
         val[mask] = abs(self.val[mask])
-        return self.__class__(val, self.unc.copy(), unit=self.unit)
+        return self.model_validate({
+            "val": val,
+            "unc": self.unc.copy(),
+            "unit": self.unit,
+        })
 
-@pydantic.dataclasses.dataclass(frozen=True)
-class FrozenMeasureResult(_MeasureResult):
-    val: FloatVector
-    unc: FloatVector
-    unit: UnitType | CompositeUnitType = dimensionless_unscaled
+class FrozenMeasureResult(_MeasureResult, frozen=True):
+    frozen: ClassVar[Literal[True]] = True
 
-@pydantic.dataclasses.dataclass
 class MeasureResult(_MeasureResult):
-    val: FloatVector
-    unc: FloatVector
-    unit: UnitType | CompositeUnitType = dimensionless_unscaled
+    frozen: ClassVar[Literal[False]] = False
 
     def update(
         self,
@@ -361,3 +441,20 @@ class MeasureResult(_MeasureResult):
         self.val[:] = temp.val
         self.unc[:] = temp.unc
         return self
+
+
+class MeasureResultDict(BaseModel):
+    """
+    Dictionary-like container for measure results.
+    """
+    results: dict[str, MeasureResult | FrozenMeasureResult]
+
+    @classmethod
+    def fromMeasureResultDict(
+        cls, 
+        results: dict[str, MeasureResult | FrozenMeasureResult],
+    ) -> Self:
+        return cls(results=results)
+
+    def toMeasureResultDict(self) -> dict[str, MeasureResult | FrozenMeasureResult]:
+        return self.results

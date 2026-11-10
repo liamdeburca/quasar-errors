@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from quasar_errors.analysis import Analyser, FrozenMeasureResult
+from quasar_errors.analysis import Analyser
+from quasar_errors.measure_result import FrozenMeasureResult
 
 
 def dump_result(

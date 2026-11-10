@@ -28,3 +28,11 @@ class Analyser(
     """
     def __hash__(self) -> int:
         return hash(self.__tuple__())
+
+
+@dataclass
+class PAQSAnalyser(Analyser):
+    """
+    Subclass of `Analyser` with a pipeline.
+    """
+    

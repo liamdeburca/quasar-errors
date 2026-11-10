@@ -8,7 +8,8 @@ from quasar_typing.bounds import CoordBounds
 from quasar_typing.string_selections import BackgroundFlux
 from quasar_utils.decorators import lru_cache
 
-from ..measure_result import FrozenMeasureResult
+from quasar_errors.measure_result import FrozenMeasureResult
+
 from .base_analyser import _BaseAnalyser
 
 
@@ -43,10 +44,10 @@ class IntegralAnalyser(_BaseAnalyser):
                 bg_flux=BackgroundFlux(set()),
             )
 
-        out = self.getOut(self._int_flux_unit)
+        out = self.getOut(self._int_flux_unit)        
         mask = (x_bounds[0] <= self.x) & (self.x <= x_bounds[1])
         if not mask.any():
-            return out
+            return out.freeze()
 
         dxs = self.dx[mask][None,:]
         if from_model:

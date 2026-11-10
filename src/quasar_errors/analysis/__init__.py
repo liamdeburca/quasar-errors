@@ -5,14 +5,19 @@ from lazy_imports import LazyImporter
 
 _import_structure: dict[str, list[str]] = {
     "analyser": ["Analyser"],
-    "measure_result": ["FrozenMeasureResult", "MeasureResult"],
+    "paqs": [
+        "PAQSContinuumOutput",
+        "PAQSLineOutput",
+        "PAQSOutput",
+    ]
 }
 
 if TYPE_CHECKING:
     from .analyser import Analyser  # noqa: F401
-    from .measure_result import (  # noqa: F401
-        FrozenMeasureResult,
-        MeasureResult,
+    from .paqs import (  # noqa: F401
+        PAQSContinuumOutput,
+        PAQSLineOutput,
+        PAQSOutput,
     )
 else:
     sys.modules[__name__] = LazyImporter(

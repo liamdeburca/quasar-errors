@@ -4,7 +4,8 @@ import pydantic
 from quasar_typing.numpy import FloatVector
 from quasar_typing.string_selections import BackgroundFlux
 
-from ..measure_result import FrozenMeasureResult
+from quasar_errors.measure_result import FrozenMeasureResult
+
 from .base_analyser import _BaseAnalyser
 
 

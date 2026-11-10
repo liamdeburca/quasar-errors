@@ -15,7 +15,7 @@ from astropy.units import Quantity, Unit, dimensionless_unscaled
 from numpy import allclose, array, isfinite, isnan, nan
 from uncertainties.unumpy import uarray
 
-from quasar_errors.analysis.measure_result import (
+from quasar_errors.measure_result import (
     FrozenMeasureResult,
     MeasureResult,
 )
