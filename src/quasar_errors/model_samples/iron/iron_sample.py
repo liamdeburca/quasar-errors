@@ -1,8 +1,8 @@
 from functools import cached_property
-from typing import ClassVar, Literal, Self
-
+from typing import Any, ClassVar, Literal, Self
+    
 import numpy as np
-import pydantic
+from pydantic import validate_call
 from quasar_models._core.modeling.iron import IronEvaluate, evaluate_exact
 from quasar_models._core.modeling.template.cytemplate import CyTemplate
 from quasar_models.iron import IronModel, IronTemplate
@@ -12,13 +12,10 @@ from quasar_typing.scipy import CSRMatrix
 from ..utils.base_sample import BaseSample
 
 
-class IronSample(BaseSample):
-    model_config = pydantic.ConfigDict(
-        frozen=True, 
-        extra="forbid", 
-        arbitrary_types_allowed=True,
-    )
-
+class IronSample(
+    BaseSample,
+    frozen=True, extra="forbid", arbitrary_types_allowed=True,
+):
     flux: float
     fwhm: float
     split: float
@@ -51,47 +48,62 @@ class IronSample(BaseSample):
                 "error estimation! This could be hugely inefficient."
             )
 
-    @classmethod
-    @pydantic.validate_call
-    def fromIronModel(cls, model: IronModel) -> Self:
-        cls._validate_is_prepared(model)
-        return IronSample(
-            flux=model.flux.value,
-            fwhm=model.fwhm.value,
-            split=model.split.value,
-            left=model.left.value,
-            right=model.right.value,
-            name=model.name,
-            template=model.template,
-            scale=model.scale,
-            n_scales=model.n_scales,
-            interpolation_matrix=model.interpolation_matrix,
-            evaluate_func=model.evaluate_func,
-            **model.cytemplates,
-        )
+    ### fromIronModel
 
     @classmethod
-    @pydantic.validate_call
-    def fromParamVector(
+    def _fromIronModel(cls, model: IronModel) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": model.flux.value,
+            "fwhm": model.fwhm.value,
+            "split": model.split.value,
+            "left": model.left.value,
+            "right": model.right.value,
+            "name": model.name,
+            "template": model.template,
+            "scale": model.scale,
+            "n_scales": model.n_scales,
+            "interpolation_matrix": model.interpolation_matrix,
+            "evaluate_func": model.evaluate_func,
+        } | model.cytemplates
+
+    @classmethod
+    @validate_call
+    def fromIronModel(cls, model: IronModel) -> Self:
+        return cls(**cls._fromIronModel(model))
+
+    ### fromParamVector
+
+    @classmethod
+    def _fromParamVector(
         cls,
         param_vector: FloatVector,
         model: IronModel,
-    ) -> Self:
+    ) -> dict[str, Any]:
         cls._validate_is_prepared(model)
-        return IronSample(
-            flux=param_vector[0],
-            fwhm=param_vector[1],
-            split=param_vector[2],
-            left=param_vector[3],
-            right=param_vector[4],
-            name=model.name,
-            template=model.template,
-            scale=model.scale,
-            n_scales=model.n_scales,
-            interpolation_matrix=model.interpolation_matrix,
-            evaluate_func=model.evaluate_func,
-            **model.cytemplates,
-        )
+        return {
+            "flux": param_vector[0],
+            "fwhm": param_vector[1],
+            "split": param_vector[2],
+            "left": param_vector[3],
+            "right": param_vector[4],
+            "name": model.name,
+            "template": model.template,
+            "scale": model.scale,
+            "n_scales": model.n_scales,
+            "interpolation_matrix": model.interpolation_matrix,
+            "evaluate_func": model.evaluate_func,
+        } | model.cytemplates
+
+    @classmethod
+    @validate_call
+    def fromParamVector(
+        cls, 
+        param_vector: 
+        FloatVector, 
+        model: IronModel,
+    ) -> Self:
+        return cls(**cls._fromParamVector(param_vector, model))
 
     def __call__(
         self,

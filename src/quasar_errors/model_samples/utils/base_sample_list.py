@@ -1,7 +1,7 @@
 from typing import Self, TypeVar
 
-import numpy as np
-import pydantic
+from numpy import array, concatenate
+from pydantic import BaseModel
 from quasar_typing.numpy import FloatVector
 
 from .base_sample import BaseSample
@@ -9,12 +9,12 @@ from .base_sample import BaseSample
 S = TypeVar("S", bound=BaseSample)
 
 
-class BaseSampleList[S](pydantic.BaseModel):
+class BaseSampleList[S](BaseModel):
     samples: list[S]
 
     @property
     def parameters(self) -> FloatVector:
-        return np.concatenate([s.parameters for s in self.samples])
+        return concatenate([s.parameters for s in self.samples])
 
 
     @property
@@ -36,22 +36,8 @@ class BaseSampleList[S](pydantic.BaseModel):
     ) -> float | FloatVector:
         if isinstance(x, (float, int)):
             assert y is None
-            return self(np.array([x]), y=None)[0]
+            return self(array([x]), y=None)[0]
 
         for sample in self.samples:
             y = sample(x, y=y)
-        return y
-
-
-    def prime(
-        self, 
-        x: float | FloatVector, 
-        y: FloatVector | None = None
-    ) -> float | FloatVector:
-        if isinstance(x, (float, int)):
-            assert y is None
-            return self.prime(np.array([x]), y=None)[0]
-
-        for sample in self.samples:
-            y = sample.prime(x, y=y)
         return y

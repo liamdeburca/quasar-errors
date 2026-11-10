@@ -1,9 +1,9 @@
 import re
 from collections.abc import Callable, Iterable
-from typing import Self
+from typing import Literal, Self
 
 import numpy as np
-import pydantic
+from pydantic import validate_call
 from quasar_models import EmModel
 from quasar_typing.astropy import ModelType
 from quasar_typing.numpy import FloatVector
@@ -18,35 +18,56 @@ from .utils import CombinedDist
 class GaussianSampleList(BaseSampleList[GaussianSample]):
     samples: list[GaussianSample]
 
+    ### fromGaussianSamples
 
     @classmethod
-    @pydantic.validate_call
-    def fromGaussianSamples(
+    def _fromGaussianSamples(
         cls,
         samples: Iterable[GaussianSample],
-    ) -> Self:
-        return cls(samples=sorted(samples, key=lambda s: s.sorting_key))
+    ) -> dict[Literal["samples"], list[GaussianSample]]:
+        return {"samples": sorted(
+            (GaussianSample.model_validate(s) for s in samples), 
+            key=lambda s: s.sorting_key,
+        )}
+
 
     @classmethod
-    @pydantic.validate_call
-    def fromGaussianSubmodels(
-        cls,
-        submodels: Iterable[EmModel],
-    ) -> Self:
-        return cls.fromGaussianSamples(
-            GaussianSample.fromGaussianModel(model)
+    @validate_call
+    def fromGaussianSamples(cls, samples: Iterable[GaussianSample]) -> Self:
+        return cls(**cls._fromGaussianSamples(samples))
+
+    ### fromGaussianSubmodels
+
+    @classmethod
+    def _fromGaussianSubmodels(cls, submodels: Iterable[EmModel]):
+        samples = (
+            GaussianSample._fromGaussianModel(model)
             for model in sorted(submodels, key=lambda m: m.sorting_key)
         )
+        return cls._fromGaussianSamples(samples)
 
     @classmethod
-    @pydantic.validate_call
-    def fromGaussianModels(cls, model: ModelType) -> Self:
-        return cls.fromGaussianSubmodels(
-            filter(
-                lambda m: getattr(m, "model_type", None) == "em",
-                (model,) if model.n_submodels == 1 else model,
-            ),
+    @validate_call
+    def fromGaussianSubmodels(cls, submodels: Iterable[EmModel]) -> Self:
+        return cls(**cls._fromGaussianSubmodels(submodels))
+
+    ### fromGaussianModels
+
+    @classmethod
+    def _fromGaussianModels(cls, model: ModelType):
+        submodels = (
+            getattr(model, "submodels", [model])
+            if getattr(model, "n_submodels", 1) > 1
+            else [model]
         )
+        return cls._fromGaussianSubmodels(submodels)
+
+    @classmethod
+    @validate_call
+    def fromGaussianModels(cls, model: ModelType) -> Self:
+        return cls(**cls._fromGaussianModels(model))
+
+    ###
 
     @property
     def wave(self) -> FloatVector:
@@ -153,8 +174,9 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
             raise NotImplementedError
         return self._combined_dist.isf
 
-    @pydantic.validate_call
-    def splitAtPattern(
+    ### splitAtPattern
+
+    def _splitAtPattern(
         self,
         pattern: StrPattern | tuple[StrPattern, ...] | Callable[[str], bool],
     ) -> tuple[Self | None, Self | None]:
@@ -184,8 +206,16 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
 
         return targets, background
 
-    @pydantic.validate_call
-    def splitAtWave(
+    @validate_call
+    def splitAtPattern(
+        self,
+        pattern: StrPattern | tuple[StrPattern, ...] | Callable[[str], bool],
+    ) -> tuple[Self | None, Self | None]:
+        return self._splitAtPattern(pattern)
+
+    ### splitAtWave
+
+    def _splitAtWave(
         self,
         target_wave: float | set[float],
     ) -> tuple[Self | None, Self | None]:
@@ -208,8 +238,16 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
 
         return targets or None, background or None
 
-    @pydantic.validate_call
-    def splitAtLine(
+    @validate_call
+    def splitAtWave(
+        self,
+        target_wave: float | set[float],
+    ) -> tuple[Self | None, Self | None]:
+        return self._splitAtWave(target_wave)
+
+    ### splitAtLine
+
+    def _splitAtLine(
         self,
         target_line: str | set[str],
     ) -> tuple[Self | None, Self | None]:
@@ -234,6 +272,15 @@ class GaussianSampleList(BaseSampleList[GaussianSample]):
             else None
 
         return targets, background
+
+    @validate_call
+    def splitAtLine(
+        self,
+        target_line: str | set[str],
+    ) -> tuple[Self | None, Self | None]:
+        return self._splitAtLine(target_line)
+
+    ###
 
     def prime(self, x: float | FloatVector) -> float | FloatVector:
         if isinstance(x, (float, int)):

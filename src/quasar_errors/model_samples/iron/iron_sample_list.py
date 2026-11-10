@@ -1,7 +1,7 @@
 from collections.abc import Iterable
-from typing import Self
+from typing import Literal, Self
 
-import pydantic
+from pydantic import validate_call
 from quasar_models.iron import IronModel
 from quasar_typing.astropy import ModelType
 
@@ -12,32 +12,44 @@ from .iron_sample import IronSample
 class IronSampleList(BaseSampleList[IronSample]):
     samples: list[IronSample]
 
+    ### fromIronSamples
 
     @classmethod
-    @pydantic.validate_call
-    def fromIronSamples(
+    def _fromIronSamples(
         cls,
         samples: Iterable[IronSample],
-    ) -> Self:
-        return cls(samples=sorted(samples, key=lambda s: s.sorting_key))
+    ) -> dict[Literal["samples"], list[IronSample]]:
+        return {"samples": sorted(samples, key=lambda s: s.sorting_key)}
 
     @classmethod
-    @pydantic.validate_call
-    def fromIronSubmodels(
-        cls,
-        submodels: Iterable[IronModel],
-    ) -> Self:
-        return cls.fromIronSamples(
+    @validate_call
+    def fromIronSamples(cls, samples: Iterable[IronSample]) -> Self:
+        return cls(**cls._fromIronSamples(samples))
+
+    ### fromIronSubmodels
+
+    @classmethod
+    def _fromIronSubmodels(cls, submodels: Iterable[IronModel]):
+        return cls._fromIronSamples(
             IronSample.fromIronModel(model)
             for model in sorted(submodels, key=lambda m: m.sorting_key)
         )
 
     @classmethod
-    @pydantic.validate_call
+    @validate_call
+    def fromIronSubmodels(cls, submodels: Iterable[IronModel]) -> Self:
+        return cls(**cls._fromIronSubmodels(submodels))
+
+    ### fromIronModels
+
+    @classmethod
+    def _fromIronModels(cls, model: ModelType):
+        return cls._fromIronSubmodels(filter(
+            lambda m: isinstance(m, IronModel),
+            (model,) if model.n_submodels == 1 else model,
+        ))
+
+    @classmethod
+    @validate_call
     def fromIronModels(cls, model: ModelType) -> Self:
-        return cls.fromIronSubmodels(
-            filter(
-                lambda m: isinstance(m, IronModel),
-                (model,) if model.n_submodels == 1 else model,
-            ),
-        )
+        return cls(**cls._fromIronModels(model))

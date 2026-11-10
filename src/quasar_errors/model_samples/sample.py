@@ -1,10 +1,9 @@
 from collections import defaultdict
 from collections.abc import Callable
-from functools import cached_property
 from typing import Any, Self
 
-import numpy as np
-import pydantic
+from numpy import concatenate, zeros_like
+from pydantic import BaseModel, validate_call
 from quasar_models.modeling import SequentialModel
 from quasar_typing.numpy import FloatVector
 from quasar_typing.re import StrPattern
@@ -16,10 +15,10 @@ from .iron.iron_sample import IronSample
 from .iron.iron_sample_list import IronSampleList
 from .line.gaussian_sample import GaussianSample
 from .line.gaussian_sample_list import GaussianSampleList
+from .utils.base_sample import BaseSample
 
 
-@pydantic.dataclasses.dataclass(frozen=True, repr=False)
-class Sample:
+class Sample(BaseModel, frozen=True):
     x: FloatVector
     y: FloatVector
     dy: FloatVector
@@ -59,7 +58,7 @@ class Sample:
                 for sample in (self.pl, self.fe, self.ba, self.hg, self.em)
                 if sample is not None
             ),
-            start=np.zeros_like(x, dtype=np.float64),
+            start=zeros_like(x),
         )
 
     @property
@@ -77,7 +76,7 @@ class Sample:
             lst.append(self.em.parameters)
         if not lst:
             return None
-        return np.concatenate(lst)
+        return concatenate(lst)
 
     @property
     def names(self) -> list[str] | None:
@@ -94,8 +93,21 @@ class Sample:
             lst.extend(self.em.names)
         return lst or None
 
+    ### fromSpectrumSample
+
     @classmethod
-    @pydantic.validate_call
+    def _fromSpectrumSample(
+        cls,
+        x: FloatVector,
+        y: FloatVector,
+        dy: FloatVector,
+        dx: FloatVector,
+        weight: float = 1.0,
+    ) -> dict[str, Any]:
+        return {"x": x, "y": y, "dy": dy, "dx": dx, "weight": weight}
+
+    @classmethod
+    @validate_call
     def fromSpectrumSample(
         cls,
         x: FloatVector,
@@ -104,7 +116,9 @@ class Sample:
         dx: FloatVector,
         weight: float = 1.0,
     ) -> Self:
-        return cls(x, y, dy, dx, weight=weight)
+        return Sample(**cls._fromSpectrumSample(x, y, dy, dx, weight=weight))
+
+    ### fromDictOfSamples
 
     @classmethod
     def _fromDictOfSamples(
@@ -113,10 +127,14 @@ class Sample:
         y: FloatVector,
         dy: FloatVector,
         dx: FloatVector,
-        all_model_samples: dict[str, list],
+        all_model_samples: dict[str, list[BaseSample]],
         weight: float = 1.0,
-    ) -> Self:
+    ) -> dict[str, Any]:
         kwargs = {
+            "x": x,
+            "y": y,
+            "dy": dy,
+            "dx": dx,
             "pl": None,
             "fe": None,
             "ba": None,
@@ -124,7 +142,6 @@ class Sample:
             "em": None,
             "weight": weight,
         }
-
         for model_type, samples in all_model_samples.items():
             match model_type:
                 case "pl":
@@ -136,8 +153,7 @@ class Sample:
                         raise NotImplementedError(msg)
                 case "fe":
                     if len(samples) > 0:
-                        kwargs["fe"] = IronSampleList.\
-                            fromIronSamples(samples)
+                        kwargs["fe"] = IronSampleList.fromIronSamples(samples)
                 case "ba":
                     if len(samples) == 1:
                         kwargs["ba"] = samples[0]
@@ -152,14 +168,31 @@ class Sample:
                         raise NotImplementedError(msg)
                 case "em":
                     if len(samples) > 0:
-                        kwargs["em"] = GaussianSampleList\
-                            .fromGaussianSamples(samples)
+                        kwargs["em"] = GaussianSampleList.fromGaussianSamples(samples)
 
-        return cls(x, y, dy, dx, **kwargs)
+        return kwargs
 
     @classmethod
-    @pydantic.validate_call
-    def fromModelSample(
+    @validate_call
+    def fromDictOfSamples(
+        cls,
+        x: FloatVector,
+        y: FloatVector,
+        dy: FloatVector,
+        dx: FloatVector,
+        all_model_samples: dict[str, list] | None = None,
+        weight: float = 1.0,
+    ) -> Self:
+        return cls._fromDictOfSamples(
+            x, y, dy, dx, 
+            all_model_samples or {}, 
+            weight=weight,
+        )
+
+    ### fromModelSample
+
+    @classmethod
+    def _fromModelSample(
         cls,
         x: FloatVector,
         y: FloatVector,
@@ -167,7 +200,7 @@ class Sample:
         dx: FloatVector,
         model: SequentialModel,
         weight: float = 1.0,
-    ) -> Self:
+    ) -> dict[str, Any]:
         all_model_samples: dict[str, list] = defaultdict(list)
         for submodel in model.submodels:
             key = submodel.model_type
@@ -192,8 +225,22 @@ class Sample:
         )
 
     @classmethod
-    @pydantic.validate_call
-    def fromParamVector(
+    @validate_call
+    def fromModelSample(
+        cls,
+        x: FloatVector,
+        y: FloatVector,
+        dy: FloatVector,
+        dx: FloatVector,
+        model: SequentialModel,
+        weight: float = 1.0,
+    ) -> Self:
+        return cls(**cls._fromModelSample(x, y, dy, dx, model, weight=weight))
+
+    ### fromParamVector
+
+    @classmethod
+    def _fromParamVector(
         cls,
         x: FloatVector,
         y: FloatVector,
@@ -202,7 +249,7 @@ class Sample:
         param_vector: FloatVector,
         model: SequentialModel,
         weight: float = 1.0,
-    ) -> Self:
+    ) -> dict[str, Any]:
         all_model_samples: dict[str, list] = defaultdict(list)
         count: int = 0
         for submodel in model.submodels:
@@ -220,20 +267,38 @@ class Sample:
                     sample_cls = GaussianSample
 
             n = submodel.parameters.size
-            sample = sample_cls.fromParamVector.__wrapped__(
-                sample_cls, 
+            sample = sample_cls.fromParamVector(
                 param_vector[count:count+n], 
                 submodel,
             )
             all_model_samples[key].append(sample)
             count += n
 
-        sample = cls._fromDictOfSamples(
+        return cls._fromDictOfSamples(
             x, y, dy, dx, 
             all_model_samples, 
             weight=weight,
         )
-        return sample
+
+    @classmethod
+    @validate_call
+    def fromParamVector(
+        cls,
+        x: FloatVector,
+        y: FloatVector,
+        dy: FloatVector,
+        dx: FloatVector,
+        param_vector: FloatVector,
+        model: SequentialModel,
+        weight: float = 1.0,
+    ) -> Self:
+        return cls(**cls._fromParamVector(
+            x, y, dy, dx, 
+            param_vector, model, 
+            weight=weight,
+        ))
+
+    ### split
 
     def _split(
         self,
@@ -252,10 +317,10 @@ class Sample:
         if self.em is None:
             assert backup is not None
             target_sample = self.__class__(
-                self.x,
-                self.y - backup(self.x),
-                self.dy,
-                self.dx,
+                x=self.x,
+                y=self.y - backup(self.x),
+                dy=self.dy,
+                dx=self.dx,
                 pl=self.pl,
                 fe=self.fe,
                 ba=self.ba,
@@ -265,10 +330,7 @@ class Sample:
             )
             background_sample = None
         else:
-            target_em, background_em = getattr(self.em, method_name).__wrapped__(
-                self.em,
-                target,
-            )
+            target_em, background_em = getattr(self.em, method_name)(target)
             if target_em is None:
                 raise ValueError(
                     "Did not isolate any targetted emission component: "
@@ -276,13 +338,16 @@ class Sample:
                 )
             elif background_em is None:
                 target_y = self.y.copy()
-                background_y = np.zeros_like(self.x, dtype=np.float64)
+                background_y = zeros_like(self.x)
             else:
                 target_y = self.y - background_em(self.x)
                 background_y = self.y - target_em(self.x)
 
             target_sample = self.__class__(
-                self.x, target_y, self.dy, self.dx,
+                x=self.x, 
+                y=target_y, 
+                dy=self.dy, 
+                dx=self.dx,
                 pl=self.pl,
                 fe=self.fe,
                 ba=self.ba,
@@ -291,7 +356,10 @@ class Sample:
                 weight=self.weight,
             )
             background_sample = self.__class__(
-                self.x, background_y, self.dy, self.dx,
+                x=self.x, 
+                y=background_y, 
+                dy=self.dy, 
+                dx=self.dx,
                 pl=self.pl,
                 fe=self.fe,
                 ba=self.ba,
@@ -301,26 +369,53 @@ class Sample:
             )
         return target_sample, background_sample
 
-    @pydantic.validate_call
+    ### splitAtPattern
+
+    def _splitAtPattern(
+        self,
+        pattern: StrPattern | tuple[StrPattern, ...] | Callable[[str], bool],
+        backup: Callable[[FloatVector], FloatVector] | None = None,
+    ) -> tuple[Self, Self | None]:
+        return self._split("_splitAtPattern", pattern, backup=backup)
+
+    @validate_call
     def splitAtPattern(
         self,
         pattern: StrPattern | tuple[StrPattern, ...] | Callable[[str], bool],
         backup: Callable[[FloatVector], FloatVector] | None = None,
     ) -> tuple[Self, Self | None]:
-        return self._split("splitAtPattern", pattern, backup=backup)
+        return self._splitAtPattern(pattern, backup=backup)
 
-    @pydantic.validate_call
+    ### splitAtWave
+
+    def _splitAtWave(
+        self,
+        target_wave: float | set[float],
+        backup: Callable[[FloatVector], FloatVector] | None = None,
+    ) -> tuple[Self, Self | None]:
+        return self._split("_splitAtWave", target_wave, backup=backup)
+
+    @validate_call
     def splitAtWave(
         self,
         target_wave: float | set[float],
         backup: Callable[[FloatVector], FloatVector] | None = None,
     ) -> tuple[Self, Self | None]:
-        return self._split("splitAtWave", target_wave, backup=backup)
+        return self._splitAtWave(target_wave, backup=backup)
 
-    @pydantic.validate_call
+    ### splitAtLine
+
+    def _splitAtLine(
+        self,
+        target_line: str | set[str],
+        backup: Callable[[FloatVector], FloatVector] | None = None,
+    ) -> tuple[Self, Self | None]:
+        return self._split("_splitAtLine", target_line, backup=backup)
+
+    @validate_call
     def splitAtLine(
         self,
         target_line: str | set[str],
         backup: Callable[[FloatVector], FloatVector] | None = None,
     ) -> tuple[Self, Self | None]:
-        return self._split("splitAtLine", target_line, backup=backup)
+        return self._splitAtLine(target_line, backup=backup)

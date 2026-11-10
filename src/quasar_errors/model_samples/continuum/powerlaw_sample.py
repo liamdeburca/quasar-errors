@@ -1,8 +1,8 @@
 from functools import cached_property
-from typing import ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 import numpy as np
-import pydantic
+from pydantic import validate_call
 from quasar_models._core.modeling.powerlaw import PowerLawEvaluate, evaluate
 from quasar_models.continuum import PowerLawModel
 from quasar_typing.numpy import FloatVector
@@ -10,13 +10,10 @@ from quasar_typing.numpy import FloatVector
 from ..utils.base_sample import BaseSample
 
 
-class PowerLawSample(BaseSample):
-    model_config = pydantic.ConfigDict(
-        frozen=True, 
-        extra="forbid", 
-        arbitrary_types_allowed=True,
-    )
-
+class PowerLawSample(
+    BaseSample,
+    frozen=True, extra="forbid", arbitrary_types_allowed=True,
+):
     flux: float
     alpha: float
     x0: float
@@ -37,36 +34,57 @@ class PowerLawSample(BaseSample):
                 "error estimation! This could be hugely inefficient."
             )
 
+    ### fromPowerLawModel
+
     @classmethod
-    @pydantic.validate_call
+    def _fromPowerLawModel(
+        cls,
+        model: PowerLawModel,
+    ) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": model.flux.value,
+            "alpha": model.alpha.value,
+            "x0": model.x0,
+            "name": model.name,
+            "evaluate_func": model.evaluate_func,
+        }
+
+    @classmethod
+    @validate_call
     def fromPowerLawModel(
         cls,
         model: PowerLawModel,
     ) -> Self:
-        cls._validate_is_prepared(model)
-        return PowerLawSample(
-            flux=model.flux.value,
-            alpha=model.alpha.value,
-            x0=model.x0,
-            name=model.name,
-            evaluate_func=model.evaluate_func,
-        )
+        return cls(**cls._fromPowerLawModel(model))
+
+    ### fromParamVector
 
     @classmethod
-    @pydantic.validate_call
+    def _fromParamVector(
+        cls,
+        param_vector: FloatVector,
+        model: PowerLawModel,
+    ) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": param_vector[0],
+            "alpha": param_vector[1],
+            "x0": model.x0,
+            "name": model.name,
+            "evaluate_func": model.evaluate_func,
+        }
+
+    @classmethod
+    @validate_call
     def fromParamVector(
         cls,
         param_vector: FloatVector,
         model: PowerLawModel,
     ) -> Self:
-        cls._validate_is_prepared(model)
-        return PowerLawSample(
-            flux=param_vector[0],
-            alpha=param_vector[1],
-            x0=model.x0,
-            name=model.name,
-            evaluate_func=model.evaluate_func,
-        )
+        return cls(**cls._fromParamVector(param_vector, model))
+
+    ###
 
     def __call__(
         self,

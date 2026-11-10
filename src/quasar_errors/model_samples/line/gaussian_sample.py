@@ -5,8 +5,8 @@ from functools import cached_property
 from typing import Any, ClassVar, Literal, Self
 
 import numpy as np
-import pydantic
 from astropy.constants import c
+from pydantic import validate_call
 from quasar_models import EmModel, GaussianModel
 from quasar_models._core.modeling.gaussian import (
     GaussianEvaluateV,
@@ -16,6 +16,7 @@ from quasar_models._core.modeling.gaussian import (
     evaluate_v,
     prime_v,
 )
+from quasar_typing.literals import LineType
 from quasar_typing.numpy import FloatVector
 from quasar_typing.scipy import RVContinuousFrozen
 from scipy.stats import norm
@@ -28,12 +29,10 @@ FWHM_TO_SIGMA = 1 / SIGMA_TO_FWHM
 C_KMS: float = c.to("km/s").value
 
 
-class GaussianSample(BaseSample):
-    model_config = pydantic.ConfigDict(
-        frozen=True, 
-        extra="forbid", 
-        arbitrary_types_allowed=True,
-    )
+class GaussianSample(
+    BaseSample, 
+    frozen=True, extra="forbid", arbitrary_types_allowed=True,
+):
     strength: float | FloatVector
     fwhm_v: float | FloatVector
     v_off: float | FloatVector
@@ -45,7 +44,7 @@ class GaussianSample(BaseSample):
     is_v_profile_copy: bool
     n_profiles: int
     strength_scale: float
-    linetype: Literal["n", "b"]
+    linetype: LineType
 
     dx: float | None
     sigma_res: float | None
@@ -77,9 +76,10 @@ class GaussianSample(BaseSample):
                 "error estimation! This could be hugely inefficient."
             )
 
+    ### fromGaussianModel
+
     @classmethod
-    @pydantic.validate_call
-    def fromGaussianModel(cls, model: EmModel) -> Self:
+    def _fromGaussianModel(cls, model: EmModel) -> dict[str, Any]:
         """
         Instantiates a GaussianSample from a GaussianModel or a velocity profile
         copy.
@@ -130,34 +130,40 @@ class GaussianSample(BaseSample):
         evaluate_func = choose_evaluate_func(dx is None)
         prime_func = choose_prime_func(dx is None)
 
-        return cls(
-            strength=strength,
-            fwhm_v=fwhm_v,
-            v_off=v_off,
-            name=name,
-            pure_name=pure_name,
-            wave=wave,
-            n_sigmas=n_sigmas,
-            is_v_profile_copy=is_v_profile_copy,
-            n_profiles=n_profiles,
-            strength_scale=strength_scale,
-            linetype=linetype,
-            
-            sigma_res=sigma_res,
-            dx=dx,
-            
-            kwargs=kwargs,
-            evaluate_func=evaluate_func,
-            prime_func=prime_func,
-        )
+        return {
+            "strength": strength,
+            "fwhm_v": fwhm_v,
+            "v_off": v_off,
+            "name": name,
+            "pure_name": pure_name,
+            "wave": wave,
+            "n_sigmas": n_sigmas,
+            "is_v_profile_copy": is_v_profile_copy,
+            "n_profiles": n_profiles,
+            "strength_scale": strength_scale,
+            "linetype": linetype,
+            "sigma_res": sigma_res,
+            "dx": dx,
+            "kwargs": kwargs,
+            "evaluate_func": evaluate_func,
+            "prime_func": prime_func,
+        }
 
     @classmethod
-    @pydantic.validate_call
-    def fromParamVector(
+    @validate_call
+    def fromGaussianModel(cls, model: EmModel) -> Self:
+        return cls(**cls._fromGaussianModel(model))
+
+    ### fromParamVector
+
+
+
+    @classmethod
+    def _fromParamVector(
         cls,
         param_vector: FloatVector,
         model: EmModel,
-    ) -> Self:
+    ) -> dict[str, Any]:
         cls._validate_is_prepared(model)
 
         is_v_profile_copy = not isinstance(model, GaussianModel)
@@ -186,25 +192,29 @@ class GaussianSample(BaseSample):
         evaluate_func = choose_evaluate_func(dx is None)
         prime_func = choose_prime_func(dx is None)
 
-        return cls(
-            strength=strength,
-            fwhm_v=fwhm_v,
-            v_off=v_off,
-            name=model.name,
-            pure_name=model.pure_name,
-            wave=model.wave,
-            n_sigmas=model.n_sigmas,
-            is_v_profile_copy=is_v_profile_copy,
-            n_profiles=n_profiles,
-            strength_scale=strength_scale,
-            
-            dx=dx,
-            sigma_res=sigma_res,
+        return {
+            "strength": strength,
+            "fwhm_v": fwhm_v,
+            "v_off": v_off,
+            "name": model.name,
+            "pure_name": model.pure_name,
+            "wave": model.wave,
+            "n_sigmas": model.n_sigmas,
+            "is_v_profile_copy": is_v_profile_copy,
+            "n_profiles": n_profiles,
+            "strength_scale": strength_scale,
+            "linetype": model.linetype,
+            "sigma_res": sigma_res,
+            "dx": dx,
+            "kwargs": kwargs,
+            "evaluate_func": evaluate_func,
+            "prime_func": prime_func,
+        }
 
-            kwargs=kwargs,
-            evaluate_func=evaluate_func,
-            prime_func=prime_func,
-        )
+    @classmethod
+    @validate_call
+    def fromParamVector(cls, param_vector: FloatVector, model: EmModel) -> Self:
+        return cls(**cls._fromParamVector(param_vector, model))
 
     def __call__(
         self,

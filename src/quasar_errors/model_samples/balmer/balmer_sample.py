@@ -1,8 +1,8 @@
 from functools import cached_property
-from typing import ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 import numpy as np
-import pydantic
+from pydantic import validate_call
 from quasar_models._core.modeling.balmer import BalmerEvaluate, evaluate_exact
 from quasar_models._core.modeling.template.cytemplate import CyTemplate
 from quasar_models.balmer import (
@@ -16,13 +16,10 @@ from quasar_typing.scipy import CSRMatrix
 from ..utils.base_sample import BaseSample
 
 
-class BalmerSample(BaseSample):
-    model_config = pydantic.ConfigDict(
-        frozen=True, 
-        extra="forbid", 
-        arbitrary_types_allowed=True,
-    )
-
+class BalmerSample(
+    BaseSample,
+    frozen=True, extra="forbid", arbitrary_types_allowed=True,
+):
     flux: float
     fwhm: float
     ratio: float
@@ -53,43 +50,59 @@ class BalmerSample(BaseSample):
                 "error estimation! This could be hugely inefficient."
             )
 
-    @classmethod
-    @pydantic.validate_call
-    def fromBalmerModel(cls, model: BalmerModel) -> Self:
-        cls._validate_is_prepared(model)
-        return BalmerSample(
-            flux=model.flux.value,
-            fwhm=model.fwhm.value,
-            ratio=model.ratio.value,
-            name=model.name,
-            continuum_template=model.continuum_template,
-            series_template=model.series_template,
-            n_scales=model.n_scales,
-            interpolation_matrix=model.interpolation_matrix,
-            evaluate_func=model.evaluate_func,
-            **model.cytemplates
-        )
+    ### fromBalmerModel
 
     @classmethod
-    @pydantic.validate_call
+    def _fromBalmerModel(cls, model: BalmerModel) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": model.flux.value,
+            "fwhm": model.fwhm.value,
+            "ratio": model.ratio.value,
+            "name": model.name,
+            "continuum_template": model.continuum_template,
+            "series_template": model.series_template,
+            "n_scales": model.n_scales,
+            "interpolation_matrix": model.interpolation_matrix,
+            "evaluate_func": model.evaluate_func,
+        } | model.cytemplates
+
+    @classmethod
+    @validate_call
+    def fromBalmerModel(cls, model: BalmerModel) -> Self:
+        return cls(**cls._fromBalmerModel(model))
+
+    ### fromParamVector
+
+    @classmethod
+    def _fromParamVector(
+        cls,
+        param_vector: FloatVector,
+        model: BalmerModel,
+    ) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": param_vector[0],
+            "fwhm": param_vector[1],
+            "ratio": param_vector[2],
+            "name": model.name,
+            "continuum_template": model.continuum_template,
+            "series_template": model.series_template,
+            "n_scales": model.n_scales,
+            "interpolation_matrix": model.interpolation_matrix,
+            "evaluate_func": model.evaluate_func,
+        } | model.cytemplates
+
+    @classmethod
+    @validate_call
     def fromParamVector(
         cls,
         param_vector: FloatVector,
         model: BalmerModel,
     ) -> Self:
-        cls._validate_is_prepared(model)
-        return BalmerSample(
-            flux=param_vector[0],
-            fwhm=param_vector[1],
-            ratio=param_vector[2],
-            name=model.name,
-            continuum_template=model.continuum_template,
-            series_template=model.series_template,
-            n_scales=model.n_scales,
-            interpolation_matrix=model.interpolation_matrix,
-            evaluate_func=model.evaluate_func,
-            **model.cytemplates,
-        )
+        return cls(**cls._fromParamVector(param_vector, model))
+
+    ###
 
     def __call__(
         self,

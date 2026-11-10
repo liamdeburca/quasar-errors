@@ -2,15 +2,11 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import ClassVar
 
-import pydantic
+from pydantic import BaseModel
 from quasar_typing.numpy import FloatVector
 
 
-class BaseSample(ABC, pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(
-        frozen=True, 
-        extra="forbid", 
-    )
+class BaseSample(ABC, BaseModel, frozen=True, extra="forbid"):
     evaluate_func: Callable
     model_type: ClassVar[str]
 

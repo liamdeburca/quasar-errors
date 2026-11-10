@@ -1,8 +1,8 @@
 from functools import cached_property
-from typing import ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self
 
 import numpy as np
-import pydantic
+from pydantic import validate_call
 from quasar_models._core.modeling.host import (
     HostGalaxyEvaluate,
     evaluate_exact,
@@ -18,13 +18,10 @@ from quasar_typing.scipy import CSRMatrix
 from ..utils.base_sample import BaseSample
 
 
-class HostGalaxySample(BaseSample):
-    model_config = pydantic.ConfigDict(
-        frozen=True, 
-        extra="forbid", 
-        arbitrary_types_allowed=True,
-    )
-    
+class HostGalaxySample(
+    BaseSample,
+    frozen=True, extra="forbid", arbitrary_types_allowed=True,
+):    
     flux: float
     fwhm: float
 
@@ -50,39 +47,55 @@ class HostGalaxySample(BaseSample):
                 "error estimation! This could be hugely inefficient."
             )
 
-    @classmethod
-    @pydantic.validate_call
-    def fromHostGalaxyModel(cls, model: HostGalaxyModel) -> Self:
-        cls._validate_is_prepared(model)
-        return HostGalaxySample(
-            flux=model.flux.value,
-            fwhm=model.fwhm.value,
-            name=model.name,
-            template=model.template,
-            n_scales=model.n_scales,
-            interpolation_matrix=model.interpolation_matrix,
-            evaluate_func=model.evaluate_func,
-            **model.cytemplates,
-        )
+    ### fromHostGalaxyModel
 
     @classmethod
-    @pydantic.validate_call
+    def _fromHostGalaxyModel(cls, model: HostGalaxyModel) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": model.flux.value,
+            "fwhm": model.fwhm.value,
+            "name": model.name,
+            "template": model.template,
+            "n_scales": model.n_scales,
+            "interpolation_matrix": model.interpolation_matrix,
+            "evaluate_func": model.evaluate_func,
+        } | model.cytemplates
+
+    @classmethod
+    @validate_call
+    def fromHostGalaxyModel(cls, model: HostGalaxyModel) -> Self:
+        return cls(**cls._fromHostGalaxyModel(model))
+
+    ### fromParamVector
+
+    @classmethod
+    def _fromParamVector(
+        cls,
+        param_vector: FloatVector,
+        model: HostGalaxyModel,
+    ) -> dict[str, Any]:
+        cls._validate_is_prepared(model)
+        return {
+            "flux": param_vector[0],
+            "fwhm": param_vector[1],
+            "name": model.name,
+            "template": model.template,
+            "n_scales": model.n_scales,
+            "interpolation_matrix": model.interpolation_matrix,
+            "evaluate_func": model.evaluate_func,
+        } | model.cytemplates
+
+    @classmethod
+    @validate_call
     def fromParamVector(
         cls,
         param_vector: FloatVector,
         model: HostGalaxyModel,
     ) -> Self:
-        cls._validate_is_prepared(model)
-        return HostGalaxySample(
-            flux=param_vector[0],
-            fwhm=param_vector[1],
-            name=model.name,
-            template=model.template,
-            n_scales=model.n_scales,
-            interpolation_matrix=model.interpolation_matrix,
-            evaluate_func=model.evaluate_func,
-            **model.cytemplates,
-        )
+        return cls(**cls._fromParamVector(param_vector, model))
+
+    ###
 
     def __call__(
         self,
