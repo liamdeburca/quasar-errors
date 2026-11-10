@@ -1,7 +1,7 @@
 from collections.abc import Callable, Iterator
-from typing import Self, TypedDict
+from typing import Any, Self, TypedDict
 
-import pydantic
+from pydantic import BaseModel, Field, validate_call
 from quasar_models.modeling import SequentialModel
 from quasar_typing.numpy import FloatVector
 
@@ -20,12 +20,10 @@ class _SerializationDict(TypedDict):
     parameters: list[FloatVector | None]
 
 
-class ErrorResult(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(frozen=True)
-
+class ErrorResult(BaseModel, frozen=True):
     seq_model: SequentialModel | None
-    samples: tuple[Sample, ...] = pydantic.Field(default_factory=tuple)
-    sample_weights: tuple[float, ...] = pydantic.Field(default_factory=tuple)
+    samples: tuple[Sample, ...] = Field(default_factory=tuple)
+    sample_weights: tuple[float, ...] = Field(default_factory=tuple)
 
     @property
     def n_samples(self) -> int:
@@ -70,8 +68,9 @@ class ErrorResult(pydantic.BaseModel):
     def __len__(self) -> int:
         return self.n_samples
 
-    @pydantic.validate_call
-    def sample_filter(
+    ### sample_filter
+
+    def _sample_filter(
         self,
         *,
         target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
@@ -106,17 +105,32 @@ class ErrorResult(pydantic.BaseModel):
 
         return sample_filter
 
-    @pydantic.validate_call
-    def isolate(
+    @validate_call
+    def sample_filter(
         self,
         *,
         target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
         target_wave: float | set[float] | None = None,
         target_line: str | set[str] | None = None,
-    ) -> Self:
+    ) -> Callable[[Sample], Sample]:
+        return self._sample_filter(
+            target_pattern=target_pattern,
+            target_wave=target_wave,
+            target_line=target_line,
+        )
+
+    ### isolate
+
+    def _isolate(
+        self,
+        *,
+        target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
+        target_wave: float | set[float] | None = None,
+        target_line: str | set[str] | None = None,
+    ) -> dict[str, Any]:
         from quasar_models.modeling import PrepareModel
 
-        sample_filter = self.sample_filter(
+        sample_filter = self._sample_filter(
             target_pattern=target_pattern,
             target_line=target_line,
             target_wave=target_wave,
@@ -140,12 +154,26 @@ class ErrorResult(pydantic.BaseModel):
                 )
                 with preparer as (seq_model, _):
                     pass
-            
-        return ErrorResult(
-            seq_model=seq_model,
-            samples=samples,
-            sample_weights=self.sample_weights,
-        )
+
+        return {
+            "seq_model": seq_model,
+            "samples": samples,
+            "sample_weights": self.sample_weights,
+        }
+    
+    @validate_call
+    def isolate(
+        self,
+        *,
+        target_pattern: str | tuple[str, ...] | Callable[[str], bool] | None = None,
+        target_wave: float | set[float] | None = None,
+        target_line: str | set[str] | None = None,
+    ) -> Self:
+        return self.__class__(**self._isolate(
+            target_pattern=target_pattern,
+            target_wave=target_wave,
+            target_line=target_line,
+        ))
 
     def _serialization_helper(self) -> _SerializationDict:
         """
